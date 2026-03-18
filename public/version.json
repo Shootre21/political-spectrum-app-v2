@@ -1,54 +1,7 @@
 {
-  "version": "2.1.0",
-  "versionName": "Analytics & Authors",
+  "version": "2.2.0",
+  "versionName": "SEO Optimized",
   "releaseDate": "2025-01-18",
-  "buildNumber": 210,
-  "changelog": [
-    {
-      "version": "2.1.0",
-      "date": "2025-01-18",
-      "changes": [
-        "NEW: Analytics Dashboard with bias distribution charts",
-        "NEW: Author Political Leanings view with 18 journalists",
-        "NEW: System Test endpoint to verify all functionality",
-        "NEW: Article thumbnails with theme indicators",
-        "IMPROVED: Static fallback data for offline operation",
-        "IMPROVED: Better outlet reliability scoring"
-      ]
-    },
-    {
-      "version": "2.0.0",
-      "date": "2025-01-18",
-      "changes": [
-        "MAJOR: Replaced AI-based analysis with algorithm-based 3-layer scoring pipeline",
-        "NEW: Outlet baseline bias database with reliability scores",
-        "NEW: Weighted signal detection (headline emotionality, topic framing, source diversity)",
-        "NEW: Evidence-based scoring with transparent output",
-        "NEW: Settings page for manual API key configuration",
-        "NEW: Version tracking and update notifications"
-      ]
-    },
-    {
-      "version": "1.1.0",
-      "date": "2025-01-17",
-      "changes": [
-        "NEW: Round-robin AI provider selection",
-        "NEW: SQL query interface for historic articles",
-        "NEW: Article caching and storage",
-        "NEW: Provider statistics tracking"
-      ]
-    },
-    {
-      "version": "1.0.0",
-      "date": "2025-01-16",
-      "changes": [
-        "Initial release",
-        "Multi-perspective headline aggregation",
-        "Political spectrum analysis with AI",
-        "Speech synthesis for analysis reading"
-      ]
-    }
-  ],
-  "updateUrl": "/api/version/check",
-  "minCompatibleVersion": "1.0.0"
+  "buildNumber": 220,
+  "github": "https://github.com/Shootre21/political-spectrum-app-v2"
 }

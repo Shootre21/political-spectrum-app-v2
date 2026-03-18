@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { SEOHead, seoPresets } from '@/components/SEOHead';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -548,8 +549,38 @@ export default function PoliticalSpectrumApp() {
     return 'bg-red-600';
   };
 
+  // Dynamic SEO based on current view
+  const getSeoForView = () => {
+    switch (view) {
+      case 'headlines':
+        return seoPresets.headlines;
+      case 'analytics':
+        return seoPresets.analytics;
+      case 'authors':
+        return seoPresets.authors;
+      case 'settings':
+        return seoPresets.settings;
+      case 'analysis':
+        return {
+          title: analysis?.article?.title?.substring(0, 60) || 'Article Analysis',
+          description: `Political bias analysis of "${analysis?.article?.title?.substring(0, 50) || 'article'}" from ${analysis?.article?.source || 'news outlet'}`,
+          keywords: ['political analysis', 'bias detection', analysis?.article?.source || 'news'].filter(Boolean),
+        };
+      default:
+        return seoPresets.home;
+    }
+  };
+
+  const seoConfig = getSeoForView();
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      {/* Dynamic SEO */}
+      <SEOHead
+        title={seoConfig.title}
+        description={seoConfig.description}
+        keywords={seoConfig.keywords}
+      />
       {/* News Ticker */}
       {tickerHeadlines.length > 0 && (
         <div className="bg-slate-900 text-white py-2 overflow-hidden">

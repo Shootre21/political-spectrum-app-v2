@@ -1,14 +1,35 @@
+# Political Spectrum App - Robots.txt
+# https://github.com/Shootre21/political-spectrum-app-v2
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://political-spectrum-app.vercel.app/sitemap.xml
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1
+
+# Allow all search engines
 User-agent: Googlebot
 Allow: /
 
 User-agent: Bingbot
 Allow: /
 
-User-agent: Twitterbot
+User-agent: DuckDuckBot
 Allow: /
 
-User-agent: facebookexternalhit
+User-agent: Slurp
 Allow: /
 
-User-agent: *
+User-agent: Baiduspider
 Allow: /
+
+# Block internal API endpoints from indexing
+Disallow: /api/test
+Disallow: /api/settings
+Disallow: /api/providers
+
+# Host
+Host: political-spectrum-app.vercel.app
