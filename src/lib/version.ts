@@ -1,9 +1,9 @@
 // App Version Configuration
 export const APP_VERSION = {
-  version: '2.3.0',
-  versionName: 'Setup & Troubleshooting',
+  version: '2.4.0',
+  versionName: 'Playwright Demo & Credentials',
   releaseDate: '2025-01-18',
-  buildNumber: 230,
+  buildNumber: 240,
 };
 
 export type UpdateStatus = 'up-to-date' | 'update-available' | 'unknown';
@@ -26,6 +26,19 @@ export function getVersionInfo(): VersionInfo {
     releaseDate: APP_VERSION.releaseDate,
     changelog: [
       {
+        version: '2.4.0',
+        date: '2025-01-18',
+        changes: [
+          'NEW: Playwright demo script for automated screenshots',
+          'NEW: Default demo credentials in setup',
+          'NEW: Interactive API key configuration prompt',
+          'NEW: Credentials change reminder system',
+          'NEW: E2E test configuration with Playwright',
+          'IMPROVED: Setup script with credential warnings',
+          'IMPROVED: Environment file with API key documentation',
+        ],
+      },
+      {
         version: '2.3.0',
         date: '2025-01-18',
         changes: [
@@ -36,8 +49,6 @@ export function getVersionInfo(): VersionInfo {
           'NEW: Playwright error screenshot capture tool',
           'NEW: FAQ & Troubleshooting documentation',
           'NEW: Quick start script (start.ps1)',
-          'IMPROVED: Automatic dependency resolution',
-          'IMPROVED: Database migration handling',
         ],
       },
       {
@@ -49,27 +60,6 @@ export function getVersionInfo(): VersionInfo {
           'NEW: Structured data (JSON-LD) for search engines',
           'NEW: Sitemap.xml for better crawling',
           'NEW: Web app manifest for PWA support',
-          'IMPROVED: Repository tags for GitHub discoverability',
-        ],
-      },
-      {
-        version: '2.1.0',
-        date: '2025-01-18',
-        changes: [
-          'NEW: Analytics Dashboard with bias distribution charts',
-          'NEW: Author Political Leanings view with 18 journalists',
-          'NEW: System Test endpoint to verify all functionality',
-          'NEW: Article thumbnails with theme indicators',
-          'IMPROVED: Static fallback data for offline operation',
-        ],
-      },
-      {
-        version: '2.0.0',
-        date: '2025-01-18',
-        changes: [
-          'MAJOR: Algorithm-based 3-layer scoring pipeline',
-          'NEW: Outlet baseline bias database',
-          'NEW: Settings page for API key configuration',
         ],
       },
     ],
