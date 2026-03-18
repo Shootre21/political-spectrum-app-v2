@@ -28,7 +28,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.4.0"
+    Version = "2.5.0"
     NodeMinVersion = "18.0.0"
     BunMinVersion = "1.0.0"
     RequiredPorts = @(3000, 5555)

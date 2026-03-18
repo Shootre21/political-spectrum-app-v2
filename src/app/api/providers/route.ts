@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getProviderStatus, getProviderStats } from '@/lib/ai-provider';
+import { getProviderStatus, getProviderStats, AI_PROVIDERS } from '@/lib/ai-provider';
 
 export async function GET() {
   try {
@@ -8,14 +8,32 @@ export async function GET() {
       getProviderStats(),
     ]);
 
-    // Merge status with stats
+    // Merge status with stats and add documentation
     const providers = status.map(provider => {
       const stat = stats.find(s => s.provider.toLowerCase().includes(provider.name.toLowerCase()));
+      const docs = AI_PROVIDERS[provider.id as keyof typeof AI_PROVIDERS];
+      
       return {
-        ...provider,
+        id: provider.id,
+        name: provider.name,
+        active: provider.active,
+        keySet: provider.keySet,
+        keyValid: provider.keyValid,
+        validationMessage: provider.validationMessage,
         requestCount: stat?.totalRequests || 0,
         successRate: stat?.successRate || 0,
         avgDuration: stat?.avgDuration || 0,
+        // Documentation for UI
+        documentation: docs ? {
+          keyFormat: docs.keyFormat,
+          keyPrefix: docs.keyPrefix,
+          getKeyUrl: docs.getKeyUrl,
+          pricing: docs.pricing,
+          rateLimit: docs.rateLimit,
+          models: docs.models,
+          defaultModel: docs.defaultModel,
+          notes: docs.notes,
+        } : null,
       };
     });
 
@@ -23,6 +41,7 @@ export async function GET() {
       providers,
       totalProviders: providers.length,
       activeProviders: providers.filter(p => p.active).length,
+      validProviders: providers.filter(p => p.keyValid).length,
     });
   } catch (error) {
     console.error('Error getting provider status:', error);
