@@ -52,7 +52,8 @@ import {
   TestTube,
   User,
   BookOpen,
-  Layers
+  Layers,
+  Palette
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -662,6 +663,8 @@ export default function PoliticalSpectrumApp() {
               <TabsList>
                 <TabsTrigger value="apikeys">API Keys</TabsTrigger>
                 <TabsTrigger value="preferences">Preferences</TabsTrigger>
+                <TabsTrigger value="environment">Environment</TabsTrigger>
+                <TabsTrigger value="theme">Theme</TabsTrigger>
                 <TabsTrigger value="about">About</TabsTrigger>
               </TabsList>
               
@@ -818,6 +821,200 @@ export default function PoliticalSpectrumApp() {
                 </Card>
               </TabsContent>
               
+              <TabsContent value="environment" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Database className="w-5 h-5" />
+                      Environment Variables
+                    </CardTitle>
+                    <CardDescription>
+                      Current environment configuration and database settings
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Alert>
+                      <Info className="w-4 h-4" />
+                      <AlertDescription>
+                        Environment variables are loaded from <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">.env</code> and <code className="bg-slate-200 dark:bg-slate-700 px-1 rounded">.env.local</code> files.
+                      </AlertDescription>
+                    </Alert>
+                    
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">Database Configuration</h4>
+                      <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg font-mono text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">DATABASE_URL:</span>
+                          <span className="text-green-600 dark:text-green-400">&quot;file:./dev.db&quot;</span>
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-muted-foreground">Provider:</span>
+                          <span>SQLite (Prisma ORM)</span>
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-muted-foreground">Location:</span>
+                          <span>./prisma/dev.db</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">AI Provider Status</h4>
+                      <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg space-y-2">
+                        {[
+                          { key: 'OPENAI_API_KEY', name: 'OpenAI', prefix: 'sk-' },
+                          { key: 'ANTHROPIC_API_KEY', name: 'Anthropic', prefix: 'sk-ant-' },
+                          { key: 'GEMINI_API_KEY', name: 'Google Gemini', prefix: 'AIza' },
+                          { key: 'GROK_API_KEY', name: 'xAI Grok', prefix: 'xai-' },
+                          { key: 'KIMI_API_KEY', name: 'Kimi', prefix: 'sk-' },
+                          { key: 'ZAI_API_KEY', name: 'Z.ai', prefix: '' },
+                        ].map(({ key, name, prefix }) => {
+                          const isSet = settings?.hasApiKeys?.[key.toLowerCase().replace('_API_KEY', '')] || false;
+                          const isDemo = settingsForm.apiKeys[key.toLowerCase().replace('_API_KEY', '')]?.includes('demo') || false;
+                          return (
+                            <div key={key} className="flex justify-between items-center text-sm">
+                              <span className="font-mono text-xs">{key}</span>
+                              <div className="flex items-center gap-2">
+                                {isDemo ? (
+                                  <Badge variant="destructive" className="text-xs">Demo Key</Badge>
+                                ) : isSet ? (
+                                  <Badge variant="default" className="text-xs bg-green-600">Configured</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs">Not Set</Badge>
+                                )}
+                                {prefix && <span className="text-xs text-muted-foreground">({prefix}...)</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">Site Configuration</h4>
+                      <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg font-mono text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">NEXT_PUBLIC_SITE_URL:</span>
+                          <span>http://localhost:3000</span>
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-muted-foreground">NODE_ENV:</span>
+                          <span className="text-blue-600 dark:text-blue-400">development</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+                      <AlertCircle className="w-4 h-4 text-yellow-600" />
+                      <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                        <strong>Security Note:</strong> Never commit your .env files to version control. 
+                        API keys should be stored securely and rotated periodically.
+                      </AlertDescription>
+                    </Alert>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="theme" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Palette className="w-5 h-5" />
+                      Theme Settings
+                    </CardTitle>
+                    <CardDescription>
+                      Customize the appearance of the application
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Theme Selection */}
+                    <div className="space-y-3">
+                      <Label>Color Theme</Label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <button
+                          onClick={() => document.documentElement.classList.remove('dark')}
+                          className="p-4 rounded-lg border-2 border-slate-200 hover:border-blue-500 transition-colors bg-white text-slate-900 flex flex-col items-center gap-2"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500" />
+                          <span className="text-sm font-medium">Light</span>
+                        </button>
+                        <button
+                          onClick={() => document.documentElement.classList.add('dark')}
+                          className="p-4 rounded-lg border-2 border-slate-700 bg-slate-900 text-white hover:border-blue-500 transition-colors flex flex-col items-center gap-2"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-400" />
+                          <span className="text-sm font-medium">Dark</span>
+                        </button>
+                        <button
+                          className="p-4 rounded-lg border-2 border-slate-300 dark:border-slate-600 hover:border-blue-500 transition-colors bg-gradient-to-br from-white to-slate-900 text-slate-600 dark:text-slate-400 flex flex-col items-center gap-2"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-600" />
+                          <span className="text-sm font-medium">System</span>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    {/* Color Accents */}
+                    <div className="space-y-3">
+                      <Label>Accent Color</Label>
+                      <div className="flex gap-3">
+                        {[
+                          { color: 'blue', bg: 'bg-blue-500' },
+                          { color: 'purple', bg: 'bg-purple-500' },
+                          { color: 'green', bg: 'bg-green-500' },
+                          { color: 'orange', bg: 'bg-orange-500' },
+                          { color: 'red', bg: 'bg-red-500' },
+                          { color: 'pink', bg: 'bg-pink-500' },
+                        ].map(({ color, bg }) => (
+                          <button
+                            key={color}
+                            className={`w-8 h-8 rounded-full ${bg} hover:scale-110 transition-transform ${color === 'blue' ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+                            title={color}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    {/* Font Size */}
+                    <div className="space-y-3">
+                      <Label>Font Size</Label>
+                      <div className="flex gap-3">
+                        <Button variant="outline" size="sm">Small</Button>
+                        <Button variant="default" size="sm">Medium</Button>
+                        <Button variant="outline" size="sm">Large</Button>
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    {/* Preview */}
+                    <div className="space-y-3">
+                      <Label>Preview</Label>
+                      <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-800">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Badge>Default</Badge>
+                          <Badge variant="secondary">Secondary</Badge>
+                          <Badge variant="destructive">Alert</Badge>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm">Primary</Button>
+                          <Button variant="outline" size="sm">Outline</Button>
+                          <Button variant="ghost" size="sm">Ghost</Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
               <TabsContent value="about" className="space-y-4 mt-4">
                 <Card>
                   <CardHeader>
@@ -962,20 +1159,119 @@ export default function PoliticalSpectrumApp() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Political Spectrum Score</CardTitle>
+                <CardDescription>
+                  Scale: Far Left (Communism) ↔ Far Right (Fascism)
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="relative h-8 rounded-full bg-gradient-to-r from-blue-500 via-gray-300 to-red-500 overflow-hidden">
+              <CardContent className="space-y-4">
+                {/* Main spectrum bar */}
+                <div className="relative h-8 rounded-full bg-gradient-to-r from-red-600 via-blue-400 via-30% via-yellow-300 via-60% to-red-700 overflow-hidden border border-slate-300 dark:border-slate-600">
                   <div
-                    className="absolute top-0 w-1 h-full bg-black shadow-lg transform -translate-x-1/2"
+                    className="absolute top-0 w-1 h-full bg-black shadow-lg transform -translate-x-1/2 z-10"
                     style={{ left: `${((analysis.spectrumScore + 10) / 20) * 100}%` }}
                   />
+                  {/* Tick marks */}
+                  {[0, 25, 50, 75, 100].map((pos) => (
+                    <div
+                      key={pos}
+                      className="absolute top-0 w-px h-2 bg-black/30"
+                      style={{ left: `${pos}%` }}
+                    />
+                  ))}
                 </div>
-                <div className="flex justify-between text-sm mt-2 text-muted-foreground">
-                  <span>Liberal (-10)</span>
-                  <span>Neutral (0)</span>
-                  <span>Conservative (+10)</span>
+                
+                {/* Scale labels with ideology markers */}
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span className="text-red-600 font-medium">Communism</span>
+                  <span>Far Left</span>
+                  <span>Center-Left</span>
+                  <span className="font-medium">Center</span>
+                  <span>Center-Right</span>
+                  <span>Far Right</span>
+                  <span className="text-red-800 font-medium">Fascism</span>
                 </div>
-                <p className="mt-4 text-sm text-muted-foreground bg-slate-100 dark:bg-slate-800 p-3 rounded-lg">
+                
+                {/* Numerical scale */}
+                <div className="flex justify-between text-sm text-muted-foreground font-mono">
+                  <span>-10</span>
+                  <span>-5</span>
+                  <span>0</span>
+                  <span>+5</span>
+                  <span>+10</span>
+                </div>
+                
+                {/* Score display */}
+                <div className="flex items-center justify-center gap-4 py-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                  <span className="text-sm text-muted-foreground">Score:</span>
+                  <span className={`text-3xl font-bold ${
+                    analysis.spectrumScore <= -7 ? 'text-red-600' :
+                    analysis.spectrumScore <= -3 ? 'text-blue-600' :
+                    analysis.spectrumScore <= 3 ? 'text-gray-600' :
+                    analysis.spectrumScore <= 7 ? 'text-orange-600' :
+                    'text-red-800'
+                  }`}>
+                    {analysis.spectrumScore.toFixed(1)}
+                  </span>
+                  <Badge variant={
+                    analysis.spectrumScore <= -7 ? 'destructive' :
+                    analysis.spectrumScore <= -3 ? 'default' :
+                    analysis.spectrumScore <= 3 ? 'secondary' :
+                    analysis.spectrumScore <= 7 ? 'outline' :
+                    'destructive'
+                  }>
+                    {analysis.spectrumScore <= -7 ? 'Far Left' :
+                     analysis.spectrumScore <= -3 ? 'Left-Leaning' :
+                     analysis.spectrumScore <= 3 ? 'Centrist' :
+                     analysis.spectrumScore <= 7 ? 'Right-Leaning' :
+                     'Far Right'}
+                  </Badge>
+                </div>
+                
+                {/* Ideology spectrum visualization */}
+                <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900">
+                  <div className="text-xs text-center text-muted-foreground mb-2">
+                    Political Ideology Spectrum
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="text-center">
+                      <div className="text-red-600 font-bold">☭</div>
+                      <div>Communism</div>
+                      <div className="text-muted-foreground">(-10 to -8)</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-blue-600 font-bold">⚖️</div>
+                      <div>Socialism</div>
+                      <div className="text-muted-foreground">(-8 to -4)</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-blue-400 font-bold">🤝</div>
+                      <div>Liberal</div>
+                      <div className="text-muted-foreground">(-4 to 0)</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-500 font-bold">🏛️</div>
+                      <div>Moderate</div>
+                      <div className="text-muted-foreground">(0)</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-orange-500 font-bold">🦅</div>
+                      <div>Conservative</div>
+                      <div className="text-muted-foreground">(0 to +4)</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-orange-700 font-bold">👑</div>
+                      <div>Nationalist</div>
+                      <div className="text-muted-foreground">(+4 to +8)</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-red-800 font-bold"> fasces</div>
+                      <div>Fascism</div>
+                      <div className="text-muted-foreground">(+8 to +10)</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <p className="text-sm text-muted-foreground bg-slate-100 dark:bg-slate-800 p-3 rounded-lg">
                   {analysis.spectrumJustification}
                 </p>
               </CardContent>
