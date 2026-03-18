@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Historic Articles - stored for SQL queries
+model Article {
+  id              String   @id @default(cuid())
+  title           String
+  url             String
+  source          String
+  publishedAt     DateTime
+  category        String?
+  spectrumScore   Float?
+  popularityScore String?
+  
+  // Thumbnail and theme
+  thumbnail       String?   // URL to thumbnail image
+  theme           String?   // Primary theme
+  themes          String?   // JSON array of themes
+  
+  // Author information
+  author          String?
+  authorLeanScore Float?
+  
+  // Full analysis JSON
+  leftWingSummary     String?
+  leftWingPoints      String?   // JSON array
+  rightWingSummary    String?
+  rightWingPoints     String?   // JSON array
+  socialistSummary    String?
+  socialistPoints     String?   // JSON array
+  spectrumJustification String?
+  wasEdited           Boolean   @default(false)
+  editReasoning       String?
+  
+  // Algorithm analysis data
+  outletBias          Float?
+  articleDelta        Float?
+  evidence            String?   // JSON
+  tags                String?   // JSON array
+  confidence          Float?
+  analysisMethod      String?   // algorithm, ai
+  
+  // Provider used for analysis
+  aiProvider      String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([source])
+  @@index([category])
+  @@index([publishedAt])
+  @@index([spectrumScore])
+  @@index([author])
+  @@index([theme])
+}
+
+// AI Provider configuration and usage tracking
+model AIProvider {
+  id            String   @id @default(cuid())
+  name          String   @unique  // chatgpt, claude, kimi, zai, grok, gemini
+  apiKey        String?
+  apiEndpoint   String?
+  isActive      Boolean  @default(true)
+  requestCount  Int      @default(0)
+  lastUsed      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Request log for analytics
+model RequestLog {
+  id          String   @id @default(cuid())
+  provider    String
+  requestType String   // headlines, analysis, ticker
+  success     Boolean
+  errorMessage String?
+  duration    Int?     // in milliseconds
+  createdAt   DateTime @default(now())
+
+  @@index([provider])
+  @@index([createdAt])
+}
+
+// Author history tracking
+model AuthorHistory {
+  id            String   @id @default(cuid())
+  name          String
+  outlet        String?
+  articleTitle  String
+  articleUrl    String
+  leanScore     Float?
+  theme         String?
+  publishedAt   DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([name])
+  @@index([outlet])
+}
+
+// Daily analytics snapshot
+model AnalyticsSnapshot {
+  id                  String   @id @default(cuid())
+  date                String   @unique  // YYYY-MM-DD
+  totalArticles       Int      @default(0)
+  analyzedArticles    Int      @default(0)
+  avgBiasScore        Float?
+  leftCount           Int      @default(0)
+  centerCount         Int      @default(0)
+  rightCount          Int      @default(0)
+  topSources          String?  // JSON array
+  topThemes           String?  // JSON array
+  createdAt           DateTime @default(now())
+}
