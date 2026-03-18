@@ -172,7 +172,7 @@ const jsonLd = {
     "Round-robin AI provider support",
   ],
   screenshot: `${siteUrl}/og-image.png`,
-  softwareVersion: "2.2.0",
+  softwareVersion: "2.3.0",
   datePublished: "2025-01-18",
   aggregateRating: {
     "@type": "AggregateRating",

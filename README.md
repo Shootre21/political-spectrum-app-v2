@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)
@@ -111,6 +111,47 @@ Political News Spectrum is a comprehensive news analysis platform that provides 
 ---
 
 ## Installation
+
+### One-Click Setup (Windows)
+
+The easiest way to get started is using the automated setup script:
+
+```powershell
+# Clone the repository
+git clone https://github.com/Shootre21/political-spectrum-app-v2.git
+cd political-spectrum-app-v2
+
+# Run one-click setup
+.\setup.ps1
+```
+
+**What the setup script does:**
+- ✅ Checks prerequisites (Node.js, Bun/npm, Git)
+- ✅ Installs all dependencies
+- ✅ Creates and configures the database
+- ✅ Sets up environment variables
+- ✅ Runs build verification
+- ✅ Generates detailed logs
+
+**Setup Options:**
+```powershell
+.\setup.ps1 -Force           # Force clean reinstall
+.\setup.ps1 -SkipDeps        # Skip dependency installation
+.\setup.ps1 -SkipDB          # Skip database setup
+.\setup.ps1 -Verbose         # Enable verbose logging
+.\setup.ps1 -LogFile my.log  # Custom log file
+```
+
+**Quick Start:**
+```powershell
+# After setup completes, start the app
+.\start.ps1
+
+# Or with options
+.\start.ps1 -Port 3001       # Use custom port
+.\start.ps1 -Studio          # Also start Prisma Studio
+.\start.ps1 -Prod            # Production mode
+```
 
 ### Prerequisites
 
@@ -739,6 +780,44 @@ pg_dump political_spectrum > backup.sql
 ---
 
 ## Troubleshooting
+
+### Error Codes Reference
+
+The setup script uses standardized error codes for easy troubleshooting:
+
+| Code | Description | Quick Fix |
+|------|-------------|-----------|
+| E001 | Node.js not installed | `winget install OpenJS.NodeJS.LTS` |
+| E002 | Node.js version too old | Update to Node.js 18+ |
+| E003 | Bun not installed | `powershell -c "irm bun.sh/install.ps1 \| iex"` |
+| E004 | Port 3000 in use | `.\start.ps1 -Port 3001` |
+| E005 | Package install failed | Delete `node_modules` and retry |
+| E006 | Database migration failed | `npx prisma migrate reset --force` |
+| E007 | Prisma client failed | `npx prisma generate` |
+| E008 | Environment file failed | Create `.env` manually |
+| E009 | Build failed | Check TypeScript errors |
+| E010 | Git not installed | `winget install Git.Git` |
+| E011 | Insufficient disk space | Free up 500MB+ |
+| E012 | Permission denied | Run as Administrator |
+| E013 | Network connection failed | Check internet/proxy |
+| E014 | Prisma CLI not found | `bun add -d prisma` |
+| E015 | SQLite database locked | Close other connections |
+
+For detailed solutions, see [docs/FAQ.md](docs/FAQ.md)
+
+### Capture Error Screenshots
+
+Use the Playwright-based error capture tool:
+
+```powershell
+# Install Playwright
+.\capture-errors.ps1 -Install
+
+# Generate error screenshots
+.\capture-errors.ps1 -Generate
+
+# Screenshots saved to docs/errors/
+```
 
 ### Common Issues
 

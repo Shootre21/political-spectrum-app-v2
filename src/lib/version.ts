@@ -1,9 +1,9 @@
 // App Version Configuration
 export const APP_VERSION = {
-  version: '2.2.0',
-  versionName: 'SEO Optimized',
+  version: '2.3.0',
+  versionName: 'Setup & Troubleshooting',
   releaseDate: '2025-01-18',
-  buildNumber: 220,
+  buildNumber: 230,
 };
 
 export type UpdateStatus = 'up-to-date' | 'update-available' | 'unknown';
@@ -25,6 +25,21 @@ export function getVersionInfo(): VersionInfo {
     versionName: APP_VERSION.versionName,
     releaseDate: APP_VERSION.releaseDate,
     changelog: [
+      {
+        version: '2.3.0',
+        date: '2025-01-18',
+        changes: [
+          'NEW: One-click PowerShell setup script (setup.ps1)',
+          'NEW: Progress bar with real-time status updates',
+          'NEW: Comprehensive logging system (setup.log)',
+          'NEW: Error handling with 15 error codes and solutions',
+          'NEW: Playwright error screenshot capture tool',
+          'NEW: FAQ & Troubleshooting documentation',
+          'NEW: Quick start script (start.ps1)',
+          'IMPROVED: Automatic dependency resolution',
+          'IMPROVED: Database migration handling',
+        ],
+      },
       {
         version: '2.2.0',
         date: '2025-01-18',
