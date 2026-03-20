@@ -347,6 +347,21 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// ⚡ Bolt Optimization: Pre-compile regexes to avoid recreating them on every function call
+const COMPILED_TOPIC_LEXICONS = Object.fromEntries(
+  Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => {
+    return [
+      topic,
+      {
+        leftRegexes: lexicon.leftTerms.map(term => new RegExp(term.toLowerCase(), 'gi')),
+        rightRegexes: lexicon.rightTerms.map(term => new RegExp(term.toLowerCase(), 'gi'))
+      }
+    ];
+  })
+);
+
+const COMPILED_HIGH_EMOTION_REGEXES = EMOTIONAL_LEXICON.highEmotion.map(word => new RegExp(word, 'gi'));
+
 /**
  * Detect topic from text
  */
@@ -369,16 +384,15 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const compiled = COMPILED_TOPIC_LEXICONS[topic];
+  if (!compiled) return 0;
   
   const lowerText = text.toLowerCase();
   
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
+  for (const regex of compiled.leftRegexes) {
     const matches = lowerText.match(regex);
     if (matches) {
       score -= matches.length * 0.5;
@@ -386,8 +400,7 @@ export function calculateFramingScore(text: string, topic: string): number {
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
+  for (const regex of compiled.rightRegexes) {
     const matches = lowerText.match(regex);
     if (matches) {
       score += matches.length * 0.5;
@@ -405,8 +418,7 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
+  for (const regex of COMPILED_HIGH_EMOTION_REGEXES) {
     const matches = lowerText.match(regex);
     if (matches) {
       score += matches.length * 2;
