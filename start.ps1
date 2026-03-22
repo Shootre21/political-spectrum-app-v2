@@ -4,7 +4,7 @@
 .DESCRIPTION
     Starts the development server with health checks, error handling, and real-time monitoring.
 .VERSION
-    2.8.0
+    2.8.1
 #>
 
 param(
@@ -19,7 +19,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.8.0"
+    Version = "2.8.1"
 }
 
 # ============================================

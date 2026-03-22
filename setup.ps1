@@ -5,7 +5,7 @@
     Automated setup script for the Political Spectrum App with progress tracking,
     logging, error handling, and troubleshooting capabilities.
 .VERSION
-    2.8.0 - Auto-install + Real-time server monitoring
+    2.8.1 - Fixed input prompts, improved build error display
 .AUTHOR
     Shootre21
 .REPOSITORY
@@ -31,7 +31,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.8.0"
+    Version = "2.8.1"
     NodeMinVersion = "18.0.0"
     BunMinVersion = "1.0.0"
     RequiredPorts = @(3000, 5555)
@@ -917,12 +917,11 @@ function Invoke-CredentialsPrompt {
         Write-Host "  Would you like to configure your API keys now?" -ForegroundColor Cyan
         Write-Host "  [Y] Yes, configure now  [N] Skip (configure later in Settings)" -ForegroundColor White
         Write-Host ""
-        Write-Host "  Press Y or N: " -NoNewline -ForegroundColor Cyan
         
-        $response = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-        Write-Host ""
+        # Use Read-Host for reliable input
+        $response = Read-Host "  Enter Y or N"
         
-        if ($response.Character -eq 'Y' -or $response.Character -eq 'y') {
+        if ($response -eq 'Y' -or $response -eq 'y') {
             Write-Host ""
             Invoke-InteractiveCredentialSetup
         } else {
@@ -1015,14 +1014,38 @@ function Invoke-BuildCheck {
             "npm run build"
         }
         
-        $result = Invoke-Expression "$buildCmd 2>&1"
+        Write-Host "  Running: $buildCmd" -ForegroundColor Gray
+        
+        # Capture build output and show in real-time
+        $buildOutput = & cmd /c "$buildCmd 2>&1"
         
         if ($LASTEXITCODE -eq 0) {
             Write-Log "Build completed successfully" -Level SUCCESS
+            Write-Host "  [OK] Build completed successfully" -ForegroundColor Green
         } else {
-            Write-Log "Build output: $result" -Level DEBUG
-            $error = Get-ErrorSolution "E009"
-            Add-Error "E009" $error.Message $error.Solution -Fatal $false
+            Write-Host "" 
+            Write-Host "  ============================================================" -ForegroundColor Red
+            Write-Host "  BUILD FAILED - Errors below:" -ForegroundColor Red
+            Write-Host "  ============================================================" -ForegroundColor Red
+            Write-Host ""
+            
+            # Show last 20 lines of build output
+            $outputLines = $buildOutput -split "`n" | Where-Object { $_.Trim() -ne "" }
+            $lastLines = $outputLines | Select-Object -Last 20
+            
+            foreach ($line in $lastLines) {
+                if ($line -match "error|Error|ERROR") {
+                    Write-Host "  $line" -ForegroundColor Red
+                } elseif ($line -match "warn|Warn|WARN") {
+                    Write-Host "  $line" -ForegroundColor Yellow
+                } else {
+                    Write-Host "  $line" -ForegroundColor Gray
+                }
+            }
+            Write-Host ""
+            
+            Write-Log "Build failed. Check output above." -Level ERROR
+            Add-Warning "W006" "Build verification failed" "Check errors above or run 'bun run build' manually"
         }
     } catch {
         Write-Log "Build check failed: $_" -Level WARN
@@ -1051,11 +1074,26 @@ function Invoke-FinalChecks {
         }
     }
     
-    # Check if database file exists
-    if (Test-Path "prisma\dev.db") {
-        Write-Log "Database file found" -Level SUCCESS
-    } else {
-        Add-Warning "W008" "Database file not found" "Run 'npx prisma migrate dev' to create the database"
+    # Check if database file exists (check multiple locations)
+    $dbPaths = @(
+        "prisma\dev.db",
+        "prisma\prod.db",
+        "db\custom.db",
+        "dev.db"
+    )
+    
+    $dbFound = $false
+    foreach ($dbPath in $dbPaths) {
+        if (Test-Path $dbPath) {
+            Write-Log "Database file found: $dbPath" -Level SUCCESS
+            $dbFound = $true
+            break
+        }
+    }
+    
+    if (-not $dbFound) {
+        # Database might still be created by Prisma, just log info
+        Write-Log "Database file will be created on first run" -Level INFO
     }
     
     Show-Progress "Final checks completed" 1
@@ -1479,21 +1517,25 @@ Log File: $LogFile
         } elseif (-not $NoMonitor) {
             # Ask user if they want to start
             Write-Host ""
-            Write-Host "  Would you like to start the development server now?" -ForegroundColor Cyan
-            Write-Host "  [Y] Yes, start server  [N] No, exit" -ForegroundColor White
-            Write-Host ""
-            Write-Host "  Press Y or N: " -NoNewline -ForegroundColor Cyan
-            
-            $response = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+            Write-Host "  ============================================================" -ForegroundColor Cyan
+            Write-Host "  Would you like to start the development server now?" -ForegroundColor White
+            Write-Host "  [Y] Yes, start server  [N] No, exit" -ForegroundColor Gray
+            Write-Host "  ============================================================" -ForegroundColor Cyan
             Write-Host ""
             
-            if ($response.Character -eq 'Y' -or $response.Character -eq 'y') {
+            # Use Read-Host for reliable input
+            $response = Read-Host "  Enter Y or N"
+            
+            if ($response -eq 'Y' -or $response -eq 'y') {
                 Write-Host ""
                 Start-DevServer -WithMonitor
             } else {
                 Write-Host ""
                 Write-Host "  To start the server later, run:" -ForegroundColor Gray
                 Write-Host "  .\start.ps1" -ForegroundColor Green
+                Write-Host "  or: bun run dev" -ForegroundColor Green
+                Write-Host ""
+                Write-Host "  Then open: http://localhost:3000" -ForegroundColor Cyan
                 Write-Host ""
             }
         }
