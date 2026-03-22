@@ -5,7 +5,7 @@
     Automated setup script for the Political Spectrum App with progress tracking,
     logging, error handling, and troubleshooting capabilities.
 .VERSION
-    2.6.0
+    2.7.0 - Auto-install dependencies feature
 .AUTHOR
     Shootre21
 .REPOSITORY
@@ -20,6 +20,7 @@ param(
     [switch]$SkipEnv,
     [switch]$Force,
     [switch]$Verbose,
+    [switch]$NoAutoInstall,  # Skip automatic installation of Node.js/Bun/Git
     [string]$LogFile = ".\setup.log"
 )
 
@@ -28,7 +29,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.6.0"
+    Version = "2.7.0"
     NodeMinVersion = "18.0.0"
     BunMinVersion = "1.0.0"
     RequiredPorts = @(3000, 5555)
@@ -230,16 +231,16 @@ function Show-ErrorSummary {
 # ============================================
 $ErrorCodes = @{
     E001 = @{
-        Message = "Node.js is not installed"
-        Solution = "Install Node.js 18+ from https://nodejs.org or run: winget install OpenJS.NodeJS.LTS"
+        Message = "Node.js is not installed and auto-install failed"
+        Solution = "Install Node.js 18+ manually from https://nodejs.org or run: winget install OpenJS.NodeJS.LTS"
     }
     E002 = @{
-        Message = "Node.js version is too old"
-        Solution = "Update Node.js to version 18 or higher"
+        Message = "Node.js version is too old and upgrade failed"
+        Solution = "Update Node.js to version 18 or higher from https://nodejs.org"
     }
     E003 = @{
-        Message = "Bun is not installed"
-        Solution = "Install Bun from https://bun.sh or run: powershell -c 'irm bun.sh/install.ps1 | iex'"
+        Message = "Bun is not installed and auto-install failed"
+        Solution = "Install Bun manually from https://bun.sh or run: powershell -c 'irm bun.sh/install.ps1 | iex'"
     }
     E004 = @{
         Message = "Port 3000 is already in use"
@@ -298,6 +299,198 @@ function Get-ErrorSolution {
         return $ErrorCodes[$Code]
     }
     return @{ Message = "Unknown error"; Solution = "Check the documentation or GitHub issues" }
+}
+
+# ============================================
+# AUTO-INSTALL SYSTEM
+# ============================================
+function Install-NodeJS {
+    param([switch]$Force)
+    
+    Write-Log "Attempting to install Node.js automatically..." -Level INFO
+    Write-Host ""
+    Write-Host "  [INSTALL] Installing Node.js LTS..." -ForegroundColor Cyan
+    
+    # Check if winget is available
+    if (Test-CommandExists "winget") {
+        try {
+            Write-Host "  Using winget to install Node.js LTS..." -ForegroundColor Gray
+            
+            # Install Node.js LTS using winget
+            $installResult = winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements 2>&1
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "Node.js installed successfully via winget" -Level SUCCESS
+                Write-Host "  [OK] Node.js installed successfully!" -ForegroundColor Green
+                
+                # Refresh environment variables
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+                
+                # Also try to refresh the current session
+                $nodePaths = @(
+                    "$env:ProgramFiles\nodejs",
+                    "$env:ProgramFiles(x86)\nodejs",
+                    "$env:LOCALAPPDATA\Programs\nodejs"
+                )
+                
+                foreach ($nodePath in $nodePaths) {
+                    if (Test-Path $nodePath) {
+                        $env:Path = "$nodePath;$env:Path"
+                        break
+                    }
+                }
+                
+                # Verify installation
+                $newVersion = Get-NodeVersion
+                if ($newVersion) {
+                    Write-Host "  Node.js version: $newVersion" -ForegroundColor Green
+                    return $true
+                } else {
+                    Write-Host "  Node.js installed but not in PATH. Please restart PowerShell and run setup again." -ForegroundColor Yellow
+                    Write-Host "  Alternatively, you may need to restart your computer for PATH changes to take effect." -ForegroundColor Yellow
+                    return $false
+                }
+            } else {
+                Write-Log "Winget installation failed: $installResult" -Level WARN
+            }
+        } catch {
+            Write-Log "Winget installation error: $_" -Level WARN
+        }
+    }
+    
+    # Fallback: Download and install Node.js using Chocolatey or direct download
+    if (Test-CommandExists "choco") {
+        try {
+            Write-Host "  Using Chocolatey to install Node.js LTS..." -ForegroundColor Gray
+            choco install nodejs-lts -y
+            
+            # Refresh environment
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            
+            $newVersion = Get-NodeVersion
+            if ($newVersion) {
+                Write-Host "  [OK] Node.js installed via Chocolatey!" -ForegroundColor Green
+                return $true
+            }
+        } catch {
+            Write-Log "Chocolatey installation failed: $_" -Level WARN
+        }
+    }
+    
+    # Final fallback: Direct download using PowerShell
+    Write-Host "  Attempting direct download installation..." -ForegroundColor Yellow
+    
+    try {
+        # Get the latest LTS version info
+        $nodeApiUrl = "https://nodejs.org/dist/index.json"
+        $nodeVersions = Invoke-RestMethod -Uri $nodeApiUrl -UseBasicParsing
+        $ltsVersion = ($nodeVersions | Where-Object { $_.lts -ne $false } | Select-Object -First 1).version
+        
+        if (-not $ltsVersion) {
+            $ltsVersion = "v20.11.0"  # Fallback version
+        }
+        
+        Write-Host "  Downloading Node.js $ltsVersion..." -ForegroundColor Gray
+        
+        # Determine architecture
+        $arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+        $msiUrl = "https://nodejs.org/dist/$ltsVersion/node-$ltsVersion-$arch.msi"
+        $msiPath = "$env:TEMP\nodejs-installer.msi"
+        
+        # Download MSI
+        Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+        
+        # Install silently
+        Write-Host "  Installing Node.js (this may take a moment)..." -ForegroundColor Gray
+        $msiArgs = "/i `"$msiPath`" /qn /norestart ADDLOCAL=ALL"
+        $msiProcess = Start-Process msiexec.exe -ArgumentList $msiArgs -Wait -PassThru
+        
+        if ($msiProcess.ExitCode -eq 0) {
+            Write-Host "  [OK] Node.js installed successfully!" -ForegroundColor Green
+            
+            # Refresh PATH
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            
+            # Clean up
+            Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+            
+            return $true
+        } else {
+            Write-Host "  [ERROR] MSI installation failed with exit code: $($msiProcess.ExitCode)" -ForegroundColor Red
+        }
+    } catch {
+        Write-Log "Direct download installation failed: $_" -Level ERROR
+        Write-Host "  [ERROR] Failed to install Node.js automatically: $_" -ForegroundColor Red
+    }
+    
+    return $false
+}
+
+function Install-Bun {
+    Write-Log "Attempting to install Bun automatically..." -Level INFO
+    Write-Host ""
+    Write-Host "  [INSTALL] Installing Bun..." -ForegroundColor Cyan
+    
+    try {
+        # Use the official Bun installer
+        Write-Host "  Downloading and installing Bun..." -ForegroundColor Gray
+        
+        $installScript = Invoke-RestMethod -Uri "https://bun.sh/install.ps1" -UseBasicParsing
+        $installScriptPath = "$env:TEMP\bun-install.ps1"
+        $installScript | Out-File -FilePath $installScriptPath -Encoding UTF8
+        
+        # Run the installer
+        $installResult = & powershell.exe -ExecutionPolicy Bypass -File $installScriptPath 2>&1
+        
+        # Refresh PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + $env:Path
+        
+        # Add Bun path if it exists
+        $bunPath = "$env:USERPROFILE\.bun\bin"
+        if (Test-Path $bunPath) {
+            $env:Path = "$bunPath;$env:Path"
+        }
+        
+        # Verify installation
+        if (Test-CommandExists "bun") {
+            $bunVersion = bun --version
+            Write-Host "  [OK] Bun installed successfully! Version: $bunVersion" -ForegroundColor Green
+            Write-Log "Bun installed successfully: $bunVersion" -Level SUCCESS
+            return $true
+        } else {
+            Write-Host "  [WARN] Bun installed but needs PATH refresh. Restart PowerShell to use Bun." -ForegroundColor Yellow
+            return $false
+        }
+    } catch {
+        Write-Log "Bun installation failed: $_" -Level WARN
+        Write-Host "  [WARN] Could not install Bun automatically. Falling back to npm." -ForegroundColor Yellow
+        return $false
+    }
+}
+
+function Install-Git {
+    Write-Log "Attempting to install Git automatically..." -Level INFO
+    Write-Host ""
+    Write-Host "  [INSTALL] Installing Git..." -ForegroundColor Cyan
+    
+    if (Test-CommandExists "winget") {
+        try {
+            winget install Git.Git --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+            
+            # Refresh PATH
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            
+            if (Test-CommandExists "git") {
+                Write-Host "  [OK] Git installed successfully!" -ForegroundColor Green
+                return $true
+            }
+        } catch {
+            Write-Log "Git installation via winget failed: $_" -Level WARN
+        }
+    }
+    
+    Write-Host "  [WARN] Could not install Git automatically." -ForegroundColor Yellow
+    return $false
 }
 
 # ============================================
@@ -378,38 +571,132 @@ function Invoke-PrerequisitesCheck {
         Add-Error "E011" $error.Message $error.Solution -Fatal $false
     }
     
-    # Check Node.js
+    # Check Node.js - AUTO-INSTALL IF MISSING (unless -NoAutoInstall is specified)
     $nodeVersion = Get-NodeVersion
     if (-not $nodeVersion) {
-        $error = Get-ErrorSolution "E001"
-        Add-Error "E001" $error.Message $error.Solution -Fatal $true
+        if ($NoAutoInstall) {
+            Write-Host ""
+            Write-Host "  [ERROR] Node.js is not installed and auto-install is disabled." -ForegroundColor Red
+            Write-Host "  Install Node.js 18+ from: https://nodejs.org" -ForegroundColor Red
+            Write-Host "  Or run: winget install OpenJS.NodeJS.LTS" -ForegroundColor Red
+            Write-Host ""
+            $error = Get-ErrorSolution "E001"
+            Add-Error "E001" $error.Message $error.Solution -Fatal $true
+        }
+        
+        Write-Host ""
+        Write-Host "  ============================================================" -ForegroundColor Yellow
+        Write-Host "  Node.js is not installed. Auto-installing..." -ForegroundColor Yellow
+        Write-Host "  ============================================================" -ForegroundColor Yellow
+        
+        $installed = Install-NodeJS
+        
+        if (-not $installed) {
+            # Try one more time after refreshing PATH
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            Start-Sleep -Seconds 2
+            
+            $nodeVersion = Get-NodeVersion
+            if (-not $nodeVersion) {
+                Write-Host ""
+                Write-Host "  [ERROR] Failed to install Node.js automatically." -ForegroundColor Red
+                Write-Host "  Please install Node.js manually from: https://nodejs.org" -ForegroundColor Red
+                Write-Host "  Or run: winget install OpenJS.NodeJS.LTS" -ForegroundColor Red
+                Write-Host ""
+                $error = Get-ErrorSolution "E001"
+                Add-Error "E001" $error.Message $error.Solution -Fatal $true
+            }
+        } else {
+            # Re-check version after installation
+            $nodeVersion = Get-NodeVersion
+        }
     }
     
-    if ((Compare-Versions $nodeVersion $Config.NodeMinVersion) -lt 0) {
-        $error = Get-ErrorSolution "E002"
-        Add-Error "E002" "$($error.Message) (Current: $nodeVersion, Required: $($Config.NodeMinVersion))" $error.Solution -Fatal $true
+    # Verify Node.js version is sufficient
+    if ($nodeVersion -and (Compare-Versions $nodeVersion $Config.NodeMinVersion) -lt 0) {
+        if ($NoAutoInstall) {
+            Write-Host ""
+            Write-Host "  [ERROR] Node.js version $nodeVersion is too old. Required: $($Config.NodeMinVersion)+" -ForegroundColor Red
+            $error = Get-ErrorSolution "E002"
+            Add-Error "E002" "$($error.Message) (Current: $nodeVersion, Required: $($Config.NodeMinVersion))" $error.Solution -Fatal $true
+        }
+        
+        Write-Host ""
+        Write-Host "  Node.js version $nodeVersion is too old. Required: $($Config.NodeMinVersion)+" -ForegroundColor Yellow
+        Write-Host "  Upgrading Node.js..." -ForegroundColor Yellow
+        
+        $installed = Install-NodeJS -Force
+        $nodeVersion = Get-NodeVersion
+        
+        if (-not $nodeVersion -or (Compare-Versions $nodeVersion $Config.NodeMinVersion) -lt 0) {
+            $error = Get-ErrorSolution "E002"
+            Add-Error "E002" "$($error.Message) (Current: $nodeVersion, Required: $($Config.NodeMinVersion))" $error.Solution -Fatal $true
+        }
     }
     
     Write-Log "Node.js version: $nodeVersion" -Level SUCCESS
+    Write-Host "  [OK] Node.js version: $nodeVersion" -ForegroundColor Green
     
-    # Check Bun (preferred) or npm
+    # Check Bun (preferred) - AUTO-INSTALL IF MISSING (unless -NoAutoInstall is specified)
     if (-not (Test-CommandExists "bun")) {
-        Add-Warning "W002" "Bun is not installed (recommended)" "Install from https://bun.sh for faster performance"
-        
-        if (-not (Test-CommandExists "npm")) {
-            $error = Get-ErrorSolution "E003"
-            Add-Error "E003" "Neither Bun nor npm is available" $error.Solution -Fatal $true
+        if ($NoAutoInstall) {
+            # Check if npm is available as fallback
+            if (-not (Test-CommandExists "npm")) {
+                Write-Host ""
+                Write-Host "  [ERROR] Neither Bun nor npm is available!" -ForegroundColor Red
+                $error = Get-ErrorSolution "E003"
+                Add-Error "E003" "Neither Bun nor npm is available" $error.Solution -Fatal $true
+            }
+            Write-Host "  Using npm as package manager (Bun not installed)" -ForegroundColor Yellow
+            $Script:PackageManager = "npm"
+        } else {
+            Write-Host ""
+            Write-Host "  Bun is not installed. Auto-installing for faster performance..." -ForegroundColor Cyan
+            
+            $bunInstalled = Install-Bun
+            
+            if (-not $bunInstalled) {
+                # Check if npm is available as fallback
+                if (-not (Test-CommandExists "npm")) {
+                    Write-Host ""
+                    Write-Host "  [ERROR] Neither Bun nor npm is available!" -ForegroundColor Red
+                    $error = Get-ErrorSolution "E003"
+                    Add-Error "E003" "Neither Bun nor npm is available" $error.Solution -Fatal $true
+                } else {
+                    Write-Host "  Using npm as package manager (Bun installation failed)" -ForegroundColor Yellow
+                    $Script:PackageManager = "npm"
+                }
+            } else {
+                $Script:PackageManager = "bun"
+                Write-Log "Using Bun as package manager" -Level SUCCESS
+            }
         }
-        
-        $Script:PackageManager = "npm"
     } else {
         $Script:PackageManager = "bun"
-        Write-Log "Using Bun as package manager" -Level SUCCESS
+        $bunVersion = bun --version
+        Write-Log "Using Bun as package manager (version: $bunVersion)" -Level SUCCESS
+        Write-Host "  [OK] Bun version: $bunVersion" -ForegroundColor Green
     }
     
-    # Check Git
+    # Check Git - AUTO-INSTALL IF MISSING (unless -NoAutoInstall is specified)
     if (-not (Test-CommandExists "git")) {
-        Add-Warning "W003" "Git is not installed" "Required for version control: winget install Git.Git"
+        if ($NoAutoInstall) {
+            Add-Warning "W003" "Git is not installed" "Required for version control: winget install Git.Git"
+        } else {
+            Write-Host ""
+            Write-Host "  Git is not installed. Auto-installing..." -ForegroundColor Cyan
+            
+            $gitInstalled = Install-Git
+            
+            if ($gitInstalled) {
+                Write-Host "  [OK] Git installed successfully" -ForegroundColor Green
+            } else {
+                Add-Warning "W003" "Git installation failed" "Required for version control: winget install Git.Git"
+            }
+        }
+    } else {
+        $gitVersion = git --version 2>&1
+        Write-Host "  [OK] Git: $gitVersion" -ForegroundColor Green
     }
     
     # Check ports
