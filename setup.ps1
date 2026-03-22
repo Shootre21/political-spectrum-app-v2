@@ -5,7 +5,7 @@
     Automated setup script for the Political Spectrum App with progress tracking,
     logging, error handling, and troubleshooting capabilities.
 .VERSION
-    2.7.0 - Auto-install dependencies feature
+    2.8.0 - Auto-install + Real-time server monitoring
 .AUTHOR
     Shootre21
 .REPOSITORY
@@ -21,6 +21,8 @@ param(
     [switch]$Force,
     [switch]$Verbose,
     [switch]$NoAutoInstall,  # Skip automatic installation of Node.js/Bun/Git
+    [switch]$Start,          # Automatically start the server after setup
+    [switch]$NoMonitor,      # Disable real-time monitoring when starting
     [string]$LogFile = ".\setup.log"
 )
 
@@ -29,7 +31,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.7.0"
+    Version = "2.8.0"
     NodeMinVersion = "18.0.0"
     BunMinVersion = "1.0.0"
     RequiredPorts = @(3000, 5555)
@@ -1059,6 +1061,304 @@ function Invoke-FinalChecks {
     Show-Progress "Final checks completed" 1
 }
 
+# ============================================
+# SERVER MANAGEMENT
+# ============================================
+$Script:ServerProcess = $null
+$Script:ServerLogPath = ".\server.log"
+
+function Start-DevServer {
+    param([switch]$WithMonitor)
+    
+    Write-Header "Starting Development Server"
+    
+    Write-Log "Starting development server..." -Level INFO
+    
+    # Check if port 3000 is already in use
+    $portInUse = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+    if ($portInUse) {
+        Write-Host ""
+        Write-Host "  [!] Port 3000 is already in use!" -ForegroundColor Yellow
+        Write-Host "  Attempting to stop existing process..." -ForegroundColor Yellow
+        
+        try {
+            $existingProcess = Get-Process -Id $portInUse.OwningProcess -ErrorAction SilentlyContinue
+            if ($existingProcess) {
+                Stop-Process -Id $existingProcess.Id -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+                Write-Host "  [OK] Stopped existing process" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "  [WARN] Could not stop existing process" -ForegroundColor Yellow
+        }
+    }
+    
+    # Clear old server log
+    if (Test-Path $Script:ServerLogPath) {
+        Remove-Item $Script:ServerLogPath -Force -ErrorAction SilentlyContinue
+    }
+    
+    # Determine start command
+    $startCmd = if ($Script:PackageManager -eq "bun") {
+        "bun run dev"
+    } else {
+        "npm run dev"
+    }
+    
+    Write-Host ""
+    Write-Host "  Starting: $startCmd" -ForegroundColor Cyan
+    Write-Host "  Port: 3000" -ForegroundColor Cyan
+    Write-Host "  Press Ctrl+C to stop the server" -ForegroundColor Gray
+    Write-Host ""
+    
+    # Start the server process
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = if ($Script:PackageManager -eq "bun") { "bun" } else { "npm" }
+    $psi.Arguments = "run dev"
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.WorkingDirectory = $PWD
+    $psi.CreateNoWindow = $true
+    
+    $Script:ServerProcess = New-Object System.Diagnostics.Process
+    $Script:ServerProcess.StartInfo = $psi
+    
+    # Register cleanup on exit
+    [Console]::TreatControlCAsInput = $false
+    [Console]::CancelKeyPress.Add_Handler({
+        param($sender, $e)
+        $e.Cancel = $true
+        Stop-DevServer
+        exit 0
+    }.GetNewClosure())
+    
+    # Also register for PowerShell engine shutdown
+    Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+        Stop-DevServer
+    } -ErrorAction SilentlyContinue
+    
+    try {
+        $null = $Script:ServerProcess.Start()
+        Write-Log "Server process started (PID: $($Script:ServerProcess.Id))" -Level SUCCESS
+        Write-Host "  [OK] Server started (PID: $($Script:ServerProcess.Id))" -ForegroundColor Green
+    } catch {
+        Write-Host "  [ERROR] Failed to start server: $_" -ForegroundColor Red
+        Write-Log "Failed to start server: $_" -Level ERROR
+        return $false
+    }
+    
+    Write-Host ""
+    Write-Host "  ============================================================" -ForegroundColor DarkCyan
+    Write-Host "  SERVER RUNNING - Real-time logs below" -ForegroundColor Cyan
+    Write-Host "  ============================================================" -ForegroundColor DarkCyan
+    Write-Host ""
+    
+    if ($WithMonitor) {
+        Start-ServerMonitor
+    }
+    
+    return $true
+}
+
+function Stop-DevServer {
+    if ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
+        Write-Host ""
+        Write-Host "  Stopping server..." -ForegroundColor Yellow
+        
+        try {
+            $Script:ServerProcess.Kill()
+            $Script:ServerProcess.WaitForExit(5000)
+            Write-Host "  [OK] Server stopped" -ForegroundColor Green
+            Write-Log "Server stopped" -Level INFO
+        } catch {
+            Write-Host "  [WARN] Could not gracefully stop server" -ForegroundColor Yellow
+        }
+    }
+}
+
+function Start-ServerMonitor {
+    $startTime = Get-Date
+    $requestCount = 0
+    $errorCount = 0
+    $lastStatusTime = $startTime
+    $statusInterval = 30  # Show status every 30 seconds
+    
+    # Create a timer for status updates
+    $statusTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    
+    # Async reading of output
+    $outputBuilder = New-Object System.Text.StringBuilder
+    $errorBuilder = New-object System.Text.StringBuilder
+    
+    while ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
+        # Read standard output
+        while (-not $Script:ServerProcess.StandardOutput.EndOfStream) {
+            $line = $Script:ServerProcess.StandardOutput.ReadLine()
+            if ($line) {
+                # Parse log for important info
+                $timestamp = Get-Date -Format "HH:mm:ss"
+                
+                # Color code different log types
+                if ($line -match "error|Error|ERROR|failed|Failed") {
+                    Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
+                    Write-Host $line -ForegroundColor Red
+                    $errorCount++
+                } elseif ($line -match "warn|Warn|WARN") {
+                    Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
+                    Write-Host $line -ForegroundColor Yellow
+                } elseif ($line -match "ready|Ready|compiled|Compiled|started|Started") {
+                    Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
+                    Write-Host $line -ForegroundColor Green
+                } elseif ($line -match "GET|POST|PUT|DELETE|PATCH") {
+                    # HTTP request log
+                    Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
+                    Write-Host $line -ForegroundColor Cyan
+                    $requestCount++
+                } elseif ($line -match "localhost:3000|http://") {
+                    Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
+                    Write-Host $line -ForegroundColor Green
+                } else {
+                    Write-Host "  [$timestamp] $line" -ForegroundColor Gray
+                }
+                
+                # Append to log file
+                Add-Content -Path $Script:ServerLogPath -Value "[$timestamp] $line" -ErrorAction SilentlyContinue
+            }
+        }
+        
+        # Read error output
+        while (-not $Script:ServerProcess.StandardError.EndOfStream) {
+            $line = $Script:ServerProcess.StandardError.ReadLine()
+            if ($line) {
+                $timestamp = Get-Date -Format "HH:mm:ss"
+                Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
+                Write-Host $line -ForegroundColor Red
+                $errorCount++
+                Add-Content -Path $Script:ServerLogPath -Value "[$timestamp] [ERROR] $line" -ErrorAction SilentlyContinue
+            }
+        }
+        
+        # Show periodic status
+        if ($statusTimer.Elapsed.TotalSeconds -ge $statusInterval) {
+            $statusTimer.Restart()
+            Show-ServerStatus -RequestCount $requestCount -ErrorCount $errorCount -StartTime $startTime
+        }
+        
+        Start-Sleep -Milliseconds 100
+    }
+    
+    # Process exited
+    if ($Script:ServerProcess.HasExited) {
+        Write-Host ""
+        Write-Host "  ============================================================" -ForegroundColor Red
+        Write-Host "  SERVER STOPPED" -ForegroundColor Red
+        Write-Host "  Exit Code: $($Script:ServerProcess.ExitCode)" -ForegroundColor Yellow
+        Write-Host "  ============================================================" -ForegroundColor Red
+        
+        # Show final stats
+        $uptime = ((Get-Date) - $startTime).ToString("hh\:mm\:ss")
+        Write-Host ""
+        Write-Host "  Session Statistics:" -ForegroundColor Cyan
+        Write-Host "  - Uptime: $uptime" -ForegroundColor Gray
+        Write-Host "  - Total Requests: $requestCount" -ForegroundColor Gray
+        Write-Host "  - Errors: $errorCount" -ForegroundColor $(if ($errorCount -gt 0) { "Red" } else { "Gray" })
+        Write-Host "  - Log file: $Script:ServerLogPath" -ForegroundColor Gray
+    }
+}
+
+function Show-ServerStatus {
+    param(
+        [int]$RequestCount,
+        [int]$ErrorCount,
+        [datetime]$StartTime
+    )
+    
+    $uptime = ((Get-Date) - $StartTime).ToString("hh\:mm\:ss")
+    
+    # Check port status
+    $portStatus = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+    $connections = ($portStatus | Measure-Object).Count
+    
+    # Get memory usage
+    $memoryStr = if ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
+        try {
+            $proc = Get-Process -Id $Script:ServerProcess.Id -ErrorAction SilentlyContinue
+            if ($proc) {
+                "{0:N0} MB" -f ($proc.WorkingSet64 / 1MB)
+            } else { "N/A" }
+        } catch { "N/A" }
+    } else { "N/A" }
+    
+    Write-Host ""
+    Write-Host "  ┌────────────────────────────────────────────────────────────┐" -ForegroundColor DarkGray
+    Write-Host "  │ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "SERVER STATUS" -NoNewline -ForegroundColor Cyan
+    Write-Host "                                              │" -ForegroundColor DarkGray
+    Write-Host "  ├────────────────────────────────────────────────────────────┤" -ForegroundColor DarkGray
+    Write-Host "  │ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "URL: " -NoNewline -ForegroundColor White
+    Write-Host "http://localhost:3000" -NoNewline -ForegroundColor Green
+    Write-Host "                          │" -ForegroundColor DarkGray
+    Write-Host "  │ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Uptime: " -NoNewline -ForegroundColor White
+    Write-Host "$uptime".PadRight(8) -NoNewline -ForegroundColor Cyan
+    Write-Host "  Memory: " -NoNewline -ForegroundColor White
+    Write-Host "$memoryStr".PadLeft(10) -NoNewline -ForegroundColor Yellow
+    Write-Host "       │" -ForegroundColor DarkGray
+    Write-Host "  │ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Active Connections: " -NoNewline -ForegroundColor White
+    Write-Host "$connections".PadLeft(2) -NoNewline -ForegroundColor Green
+    Write-Host "   Total Requests: " -NoNewline -ForegroundColor White
+    Write-Host "$requestCount".PadLeft(5) -NoNewline -ForegroundColor Cyan
+    Write-Host "   │" -ForegroundColor DarkGray
+    Write-Host "  │ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Errors: " -NoNewline -ForegroundColor White
+    $errorColor = if ($ErrorCount -gt 0) { "Red" } else { "Green" }
+    Write-Host "$ErrorCount".PadLeft(3) -NoNewline -ForegroundColor $errorColor
+    Write-Host "                                                  │" -ForegroundColor DarkGray
+    Write-Host "  └────────────────────────────────────────────────────────────┘" -ForegroundColor DarkGray
+    Write-Host ""
+}
+
+function Test-ServerRunning {
+    param([int]$Port = 3000, [int]$TimeoutSeconds = 30)
+    
+    Write-Host "  Waiting for server to be ready" -NoNewline -ForegroundColor Cyan
+    
+    $maxAttempts = $TimeoutSeconds * 2
+    $attempts = 0
+    
+    while ($attempts -lt $maxAttempts) {
+        $attempts++
+        
+        try {
+            $tcpClient = New-Object System.Net.Sockets.TcpClient
+            $connect = $tcpClient.BeginConnect("localhost", $Port, $null, $null)
+            $wait = $connect.AsyncWaitHandle.WaitOne(500)
+            
+            if ($wait) {
+                try {
+                    $tcpClient.EndConnect($connect)
+                    $tcpClient.Close()
+                    Write-Host " [OK]" -ForegroundColor Green
+                    Write-Host "  Server is running on port $Port" -ForegroundColor Green
+                    return $true
+                } catch { }
+            }
+            
+            $tcpClient.Close()
+        } catch { }
+        
+        Write-Host "." -NoNewline -ForegroundColor Cyan
+        Start-Sleep -Milliseconds 500
+    }
+    
+    Write-Host " [FAILED]" -ForegroundColor Red
+    Write-Host "  Server did not start within $TimeoutSeconds seconds" -ForegroundColor Red
+    return $false
+}
+
 function Show-SuccessMessage {
     Write-Header "Setup Complete!"
     
@@ -1170,6 +1470,34 @@ Log File: $LogFile
 "@
     
     Add-Content -Path $LogFile -Value $summary
+    
+    # Start server if requested or prompt user
+    if (-not ($Script:Errors | Where-Object { $_.Fatal })) {
+        if ($Start) {
+            # Auto-start requested
+            Start-DevServer -WithMonitor
+        } elseif (-not $NoMonitor) {
+            # Ask user if they want to start
+            Write-Host ""
+            Write-Host "  Would you like to start the development server now?" -ForegroundColor Cyan
+            Write-Host "  [Y] Yes, start server  [N] No, exit" -ForegroundColor White
+            Write-Host ""
+            Write-Host "  Press Y or N: " -NoNewline -ForegroundColor Cyan
+            
+            $response = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+            Write-Host ""
+            
+            if ($response.Character -eq 'Y' -or $response.Character -eq 'y') {
+                Write-Host ""
+                Start-DevServer -WithMonitor
+            } else {
+                Write-Host ""
+                Write-Host "  To start the server later, run:" -ForegroundColor Gray
+                Write-Host "  .\start.ps1" -ForegroundColor Green
+                Write-Host ""
+            }
+        }
+    }
 }
 
 # Run main function
