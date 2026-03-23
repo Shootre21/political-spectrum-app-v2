@@ -1401,7 +1401,7 @@ function Start-DevServerInternal {
             $e.Cancel = $true
             Stop-DevServer
             exit 0
-        }.GetNewClosure()) -ErrorAction SilentlyContinue
+        }.GetNewClosure())
     } catch {
         # Ignore errors - cleanup will still happen via PowerShell.Exiting
     }
