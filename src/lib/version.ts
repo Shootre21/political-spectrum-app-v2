@@ -1,9 +1,9 @@
 // App Version Configuration
 export const APP_VERSION = {
-  version: '3.3.1',
-  versionName: 'Windows Fix',
-  releaseDate: '2026-03-23',
-  buildNumber: 331,
+  version: '3.5.0',
+  versionName: 'Share & Misc Pages',
+  releaseDate: '2026-03-24',
+  buildNumber: 350,
 };
 
 export type UpdateStatus = 'up-to-date' | 'update-available' | 'unknown';
@@ -25,6 +25,58 @@ export function getVersionInfo(): VersionInfo {
     versionName: APP_VERSION.versionName,
     releaseDate: APP_VERSION.releaseDate,
     changelog: [
+      {
+        version: '3.5.0',
+        date: '2026-03-24',
+        changes: [
+          'NEW: Share Page (/share) - Social sharing with Twitter, Facebook, LinkedIn, etc.',
+          'NEW: Misc Page (/misc) - FAQ, resources, support, and contact information',
+          'NEW: Enhanced footer with three-column layout (PRODUCT, COMPANY, CONNECT)',
+          'NEW: QR code section for mobile sharing',
+          'NEW: Embed options for widgets and badges',
+          'NEW: Community impact stats showing share counts',
+          'IMPROVED: Consistent dark footer styling throughout the app',
+        ],
+      },
+      {
+        version: '3.4.2',
+        date: '2026-03-24',
+        changes: [
+          'NEW: Blindspot Alert - Shows coverage disparity between political leanings',
+          'NEW: Visual warning when one side has 20%+ more coverage than the other',
+          'NEW: Mini coverage distribution chart within alert',
+          'NEW: Color-coded alerts (red for right undercoverage, blue for left undercoverage)',
+          'IMPROVED: Better awareness of media bias and coverage gaps',
+          'IMPROVED: Encourages exploring diverse sources for balanced perspective',
+        ],
+      },
+      {
+        version: '3.4.1',
+        date: '2026-03-24',
+        changes: [
+          'NEW: Validation utilities for all numeric values',
+          'NEW: validateBiasScore (-3 to +3), validateSpectrumScore (-10 to +10)',
+          'NEW: validateReliabilityScore (0-100), validateConfidence (0-1)',
+          'NEW: validatePercentage, validateCount for safe display',
+          'NEW: URL and date validation helpers',
+          'IMPROVED: All displayed numbers are properly clamped and validated',
+          'IMPROVED: EnhancedHeadlineCard with validated bias scores and reliability',
+          'IMPROVED: CoverageDetailsSidebar with validated percentages',
+          'FIX: Prevents NaN and undefined values in UI',
+        ],
+      },
+      {
+        version: '3.4.0',
+        date: '2026-03-24',
+        changes: [
+          'NEW: Enhanced headline cards with source dates and bias indicators',
+          'NEW: Coverage Details sidebar with bias distribution visualization',
+          'NEW: Similar Topics section with expandable topic chips',
+          'NEW: Other News Sources section showing related articles',
+          'IMPROVED: Visual design with dark mode support',
+          'IMPROVED: Responsive grid layout (1 column mobile → 4 columns desktop)',
+        ],
+      },
       {
         version: '3.3.1',
         date: '2026-03-23',

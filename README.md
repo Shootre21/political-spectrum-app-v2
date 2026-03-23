@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.5.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)
@@ -12,6 +12,26 @@
 **✨ Works 100% locally - NO external API keys required! ✨**
 
 [Features](#features) • [Installation](#installation) • [Architecture](#architecture) • [FAQ](#faq)
+
+</div>
+
+---
+
+## Screenshots
+
+<div align="center">
+
+### Homepage - News Headlines
+![Homepage](./docs/screenshots/homepage.png)
+
+### Share Page - Social Sharing
+![Share Page](./docs/screenshots/share-page.png)
+
+### Misc Page - FAQ & Resources
+![Misc Page](./docs/screenshots/misc-page.png)
+
+### Enhanced Footer
+![Footer](./docs/screenshots/footer.png)
 
 </div>
 

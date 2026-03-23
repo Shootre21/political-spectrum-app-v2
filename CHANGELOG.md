@@ -5,6 +5,58 @@ All notable changes to the Political News Spectrum app will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-03-24
+
+### New Features
+
+#### Share Page (`/share`)
+A complete social sharing page to help spread media literacy:
+
+- **Hero Section** - Eye-catching gradient header with sharing call-to-action
+- **Share Link** - Copy-to-clipboard functionality for the app URL
+- **Social Media Buttons** - Direct sharing to Twitter, Facebook, LinkedIn, Telegram, WhatsApp, Email
+- **Custom Message** - Personalize your share message before posting
+- **Community Impact Stats** - Shows share counts by platform (Twitter, Facebook, LinkedIn, Email)
+- **Embed Options** - Widget and badge embed codes for websites
+- **QR Code Section** - Downloadable QR code for mobile sharing
+- **Quick Actions** - Easy navigation to main app, misc page, and social platforms
+
+#### Misc Page (`/misc`)
+A comprehensive miscellaneous resources page:
+
+- **Stats Dashboard** - Displays 35+ outlets, 50K+ articles, 10K+ users, 85% accuracy
+- **Quick Links** - Navigate to Features, Methodology, Sources, Analytics
+- **Resources & Tools** - API Documentation, Browser Extension, Mobile App, Data Export
+- **FAQ Section** - 6 expandable questions/answers about bias detection and privacy
+- **Support & Feedback** - GitHub star, bug reports, feature requests, contributions
+- **Team & Credits** - Creator info and acknowledgments to media bias sources
+- **Legal & Policies** - Links to Privacy Policy, Ethics Policy, Terms of Service
+- **Contact Section** - GitHub, Twitter, and Email contact options
+
+#### Enhanced Footer
+Updated three-column footer layout matching the UI mockup:
+
+- **PRODUCT Column** - Features, Methodology, Sources, Pricing links
+- **COMPANY Column** - About Us, Ethics Policy, Privacy, Contact links
+- **CONNECT Column** - Share icon and Misc icon buttons
+
+### Changed
+
+- Footer now has dark slate background (`bg-slate-900`)
+- Added proper navigation links throughout the app
+- Consistent styling with the rest of the application
+
+### Technical Details
+
+| Component | Change |
+|-----------|--------|
+| Share Page | NEW - `/share` route with social sharing features |
+| Misc Page | NEW - `/misc` route with FAQ, resources, and contact |
+| Main Footer | Updated - Three-column layout with links |
+| page.tsx | Updated - Footer with PRODUCT, COMPANY, CONNECT sections |
+
+---
+
 ## [3.4.2] - 2026-03-24
 
 ### New Features
@@ -343,6 +395,7 @@ If you weren't using AI:
 
 | Version | Name | Key Feature |
 |---------|------|-------------|
+| 3.5.0 | Share & Misc Pages | Social sharing and resources pages |
 | 3.4.2 | Blindspot Alert | Coverage disparity detection & alerts |
 | 3.4.1 | Validation & Data Integrity | All numbers validated and clamped |
 | 3.4.0 | Enhanced UI & Coverage | New headline cards, coverage sidebar, topics |
@@ -357,6 +410,7 @@ If you weren't using AI:
 
 ---
 
+[3.5.0]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.3.1...v3.4.0

@@ -1,10 +1,24 @@
 {
-  "version": "3.4.2",
-  "versionName": "Blindspot Alert Feature",
+  "version": "3.5.0",
+  "versionName": "Share & Misc Pages",
   "releaseDate": "2026-03-24",
-  "buildNumber": 342,
+  "buildNumber": 350,
   "github": "https://github.com/Shootre21/political-spectrum-app-v2",
   "changelog": [
+    {
+      "version": "3.5.0",
+      "date": "2026-03-24",
+      "changes": [
+        "NEW: Share Page (/share) - Social sharing with Twitter, Facebook, LinkedIn, Telegram, WhatsApp, Email",
+        "NEW: Misc Page (/misc) - FAQ, resources, support options, team credits, contact info",
+        "NEW: Enhanced footer with three-column layout (PRODUCT, COMPANY, CONNECT)",
+        "NEW: QR code section for mobile sharing on Share page",
+        "NEW: Embed options for widgets and badges",
+        "NEW: Community impact stats showing share counts by platform",
+        "IMPROVED: Consistent dark footer styling (bg-slate-900) throughout the app",
+        "IMPROVED: Better navigation links across all pages"
+      ]
+    },
     {
       "version": "3.4.2",
       "date": "2026-03-24",
