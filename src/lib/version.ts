@@ -1,9 +1,9 @@
 // App Version Configuration
 export const APP_VERSION = {
-  version: '3.1.0',
-  versionName: 'Independent Operation',
+  version: '3.2.0',
+  versionName: 'Database Auto-Config',
   releaseDate: '2026-03-23',
-  buildNumber: 310,
+  buildNumber: 320,
 };
 
 export type UpdateStatus = 'up-to-date' | 'update-available' | 'unknown';
@@ -25,6 +25,19 @@ export function getVersionInfo(): VersionInfo {
     versionName: APP_VERSION.versionName,
     releaseDate: APP_VERSION.releaseDate,
     changelog: [
+      {
+        version: '3.2.0',
+        date: '2026-03-23',
+        changes: [
+          'CRITICAL FIX: Database now auto-configures - no manual setup needed',
+          'FIX: DATABASE_URL environment variable now has automatic fallback',
+          'FIX: App starts successfully even without .env file',
+          'IMPROVED: Better database initialization with detailed logging',
+          'IMPROVED: Added isDbAvailable(), getDbError(), getDbUrl() helper functions',
+          'UPDATED: .env file with clearer instructions',
+          'UPDATED: FAQ with current version info and database troubleshooting',
+        ],
+      },
       {
         version: '3.1.0',
         date: '2026-03-23',

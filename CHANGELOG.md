@@ -5,6 +5,46 @@ All notable changes to the Political News Spectrum app will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-03-23
+
+### Critical Fixes
+
+#### Database Auto-Configuration
+The app now **automatically configures the database** - no manual setup needed!
+
+- **FIXED**: `DATABASE_URL not found` error that prevented articles from loading
+- **FIXED**: App now starts successfully even without `.env` file
+- **FIXED**: Database path defaults to `./db/custom.db` automatically
+
+### Changed
+
+- **Database Module** (`src/lib/db.ts`)
+  - Added automatic DATABASE_URL fallback to `file:./db/custom.db`
+  - Added `isDbAvailable()` function to check database status
+  - Added `getDbError()` function to get last error
+  - Added `getDbUrl()` function to get current database URL
+  - Improved logging for troubleshooting
+
+- **Environment Files** (`.env`, `.env.example`)
+  - Updated with clearer instructions
+  - Better organized sections
+  - Clear indication that NO configuration is needed
+
+### Why This Matters
+
+Previously, users had to:
+1. Create `.env` file manually
+2. Add `DATABASE_URL="file:./db/custom.db"`
+3. Run `prisma generate`
+4. Hope it worked
+
+Now:
+1. Just run `bun run dev` - that's it!
+
+The app handles all database configuration automatically.
+
+---
+
 ## [3.1.0] - 2026-03-23
 
 ### Major Changes
@@ -109,6 +149,7 @@ If you weren't using AI:
 
 | Version | Name | Key Feature |
 |---------|------|-------------|
+| 3.2.0 | Database Auto-Config | Automatic database setup |
 | 3.1.0 | Independent Operation | No external AI dependency |
 | 3.0.2 | Windows Compatibility Fix | Prisma v6 pin |
 | 3.0.0 | Management Console | Interactive tools |
@@ -117,6 +158,5 @@ If you weren't using AI:
 
 ---
 
+[3.2.0]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.0.2...v3.1.0
-[3.0.2]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.0.0...v3.0.2
-[3.0.0]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v2.0.0...v3.0.0

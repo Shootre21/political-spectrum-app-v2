@@ -1,6 +1,6 @@
 # Political Spectrum App - FAQ & Troubleshooting Guide
 
-**Version:** 2.3.0  
+**Version:** 3.2.0  
 **Author:** Shootre21  
 **Repository:** https://github.com/Shootre21/political-spectrum-app-v2
 
@@ -20,12 +20,11 @@
 # Install dependencies
 bun install
 
-# Setup database
-npx prisma migrate dev --name init
-
-# Start development server
+# Start development server - database auto-configures!
 bun run dev
 ```
+
+**That's it!** The app now automatically configures the database. No manual `.env` setup needed.
 
 ### What are the system requirements?
 
@@ -40,6 +39,28 @@ bun run dev
 ---
 
 ## 🔧 Common Errors & Solutions
+
+### Error E000: Database Configuration (NEW - v3.2.0)
+
+**Symptoms:**
+- `Environment variable not found: DATABASE_URL`
+- `PrismaClientInitializationError`
+
+**Solution:**
+This error should NO LONGER occur in v3.2.0+! The app now automatically:
+1. Sets `DATABASE_URL` to `file:./db/custom.db` if not configured
+2. Creates the database file if it doesn't exist
+3. Initializes Prisma client with proper error handling
+
+If you still see this error:
+```powershell
+# Ensure you have the latest version
+git pull origin master
+bun install
+bun run dev
+```
+
+---
 
 ### Error E001: Node.js is not installed
 
@@ -380,21 +401,30 @@ Remove-Item prisma\dev.db-journal -ErrorAction SilentlyContinue
 
 **Q: What AI providers are supported?**
 
-A: The app supports 6 AI providers:
+A: The app supports 5 AI providers (all OPTIONAL - use your own API keys):
 - OpenAI (ChatGPT)
 - Anthropic (Claude)
-- Moonshot (Kimi)
-- Z.ai
 - xAI (Grok)
 - Google (Gemini)
+- Moonshot (Kimi)
 
-Configure API keys in the Settings page.
+Configure API keys in the Settings page. The app works FULLY without any API keys - algorithm analysis is the default method.
 
 ---
 
 **Q: Do I need API keys to use the app?**
 
-A: **No!** The app uses an algorithm-based analysis by default. AI analysis is optional and can be triggered with the "Analyze with AI" button. API keys are only needed for AI-powered analysis.
+A: **NO!** The app uses algorithm-based analysis by default. AI analysis is completely optional. API keys are only needed if you want AI-powered deep analysis.
+
+---
+
+**Q: How does the app work without API keys?**
+
+A: The app now works 100% independently:
+1. **RSS Feeds**: Real news fetched from 15+ actual news sources (NYT, Fox, NPR, etc.)
+2. **Algorithm Analysis**: Local bias detection using outlet baselines, topic framing, and language patterns
+3. **Local Database**: All data stored in SQLite on your machine
+4. **No Rate Limits**: Your own local instance with no restrictions
 
 ---
 
@@ -571,4 +601,4 @@ When reporting issues, include:
 
 ---
 
-*Last Updated: v2.3.0 - 2025-01-18*
+*Last Updated: v3.2.0 - 2026-03-23*
