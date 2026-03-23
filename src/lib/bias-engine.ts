@@ -34,6 +34,7 @@ export interface BiasAnalysisResult {
   // Labels
   outletLabel: string;
   finalLabel: string;
+  spectrumJustification: string;
   
   // Detailed signals
   signals: {
@@ -111,12 +112,18 @@ export function analyzeArticle(data: HeadlineData): BiasAnalysisResult {
   // Calculate confidence
   const confidence = calculateConfidence(outlet, evidence);
   
+  // Generate spectrum justification
+  const outletLabel = getBiasLabel(outletBias);
+  const finalLabel = getBiasLabel(finalBias);
+  const spectrumJustification = `Outlet baseline: ${outletLabel} (${outletBias.toFixed(1)}). Article framing deviation: ${articleDelta > 0 ? '+' : ''}${articleDelta.toFixed(2)}. Final score: ${finalBias.toFixed(2)} (${finalLabel}). Tags: ${tags.join(', ')}`;
+  
   return {
     outletBias,
     articleDelta,
     finalBias,
-    outletLabel: getBiasLabel(outletBias),
-    finalLabel: getBiasLabel(finalBias),
+    outletLabel,
+    finalLabel,
+    spectrumJustification,
     signals: {
       headlineEmotionality: calculateEmotionalScore(headline),
       topicFraming: calculateAllTopicFraming(fullText),

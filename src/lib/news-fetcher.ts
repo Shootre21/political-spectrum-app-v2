@@ -57,6 +57,46 @@ export interface FetchedHeadlines {
 }
 
 /**
+ * Decode HTML entities in text
+ */
+function decodeHTMLEntities(text: string): string {
+  const entities: Record<string, string> = {
+    '&apos;': "'",
+    '&#39;': "'",
+    '&quot;': '"',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&nbsp;': ' ',
+    '&#x27;': "'",
+    '&rsquo;': "'",
+    '&lsquo;': "'",
+    '&rdquo;': '"',
+    '&ldquo;': '"',
+    '&mdash;': '—',
+    '&ndash;': '–',
+    '&hellip;': '...',
+  };
+  
+  let decoded = text;
+  for (const [entity, char] of Object.entries(entities)) {
+    decoded = decoded.split(entity).join(char);
+  }
+  
+  // Decode numeric entities like &#39;
+  decoded = decoded.replace(/&#(\d+);/g, (match, num) => {
+    return String.fromCharCode(parseInt(num, 10));
+  });
+  
+  // Decode hex entities like &#x27;
+  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => {
+    return String.fromCharCode(parseInt(hex, 16));
+  });
+  
+  return decoded;
+}
+
+/**
  * Parse RSS XML feed
  */
 function parseRSS(xml: string, feedInfo: { source: string; domain: string }): RawArticle[] {
@@ -75,10 +115,16 @@ function parseRSS(xml: string, feedInfo: { source: string; domain: string }): Ra
       const pubDateMatch = item.match(/<pubDate[^>]*>(.*?)<\/pubDate>/i);
       const descMatch = item.match(/<description[^>]*><!\[CDATA\[(.*?)\]\]><\/description>|<description[^>]*>(.*?)<\/description>/i);
       
-      const title = titleMatch ? (titleMatch[1] || titleMatch[2] || '').trim() : '';
+      // Get title and decode HTML entities
+      let title = titleMatch ? (titleMatch[1] || titleMatch[2] || '').trim() : '';
+      title = decodeHTMLEntities(title);
+      
       const url = linkMatch ? linkMatch[1].trim() : '';
       const pubDate = pubDateMatch ? new Date(pubDateMatch[1]) : new Date();
-      const description = descMatch ? (descMatch[1] || descMatch[2] || '').trim() : '';
+      
+      // Get description and decode HTML entities
+      let description = descMatch ? (descMatch[1] || descMatch[2] || '').trim() : '';
+      description = decodeHTMLEntities(description);
       
       if (title && url) {
         articles.push({

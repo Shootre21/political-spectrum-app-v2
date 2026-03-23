@@ -29,6 +29,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  // Required for social image resolution
+  metadataBase: new URL(siteUrl),
+  
   // Basic Meta
   title: {
     default: `${siteName} - AI-Powered Media Bias Analysis`,
