@@ -190,14 +190,79 @@ interface OtherNewsSource {
   reliability: number;
 }
 
+// ==================== VALIDATION UTILITIES ====================
+
+// Validate and clamp bias score (-3 to +3 range)
+const validateBiasScore = (score: unknown): number => {
+  const num = typeof score === 'number' ? score : parseFloat(String(score));
+  if (isNaN(num)) return 0;
+  return Math.max(-3, Math.min(3, num));
+};
+
+// Validate and clamp spectrum score (-10 to +10 range)
+const validateSpectrumScore = (score: unknown): number => {
+  const num = typeof score === 'number' ? score : parseFloat(String(score));
+  if (isNaN(num)) return 0;
+  return Math.max(-10, Math.min(10, num));
+};
+
+// Validate reliability score (0-100 range)
+const validateReliabilityScore = (score: unknown): number => {
+  const num = typeof score === 'number' ? score : parseFloat(String(score));
+  if (isNaN(num)) return 70; // Default to medium reliability
+  return Math.max(0, Math.min(100, num));
+};
+
+// Validate confidence (0-1 range)
+const validateConfidence = (confidence: unknown): number => {
+  const num = typeof confidence === 'number' ? confidence : parseFloat(String(confidence));
+  if (isNaN(num)) return 0.5;
+  return Math.max(0, Math.min(1, num));
+};
+
+// Validate percentage (0-100)
+const validatePercentage = (value: unknown): number => {
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
+  if (isNaN(num)) return 0;
+  return Math.max(0, Math.min(100, num));
+};
+
+// Validate article count (non-negative integer)
+const validateCount = (count: unknown): number => {
+  const num = typeof count === 'number' ? count : parseInt(String(count));
+  if (isNaN(num)) return 0;
+  return Math.max(0, Math.floor(num));
+};
+
+// Validate URL
+const isValidUrl = (url: unknown): boolean => {
+  if (typeof url !== 'string') return false;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Validate date string
+const isValidDate = (date: unknown): boolean => {
+  if (!date) return false;
+  const d = new Date(date as string);
+  return !isNaN(d.getTime());
+};
+
 // ==================== HELPER FUNCTIONS ====================
 
-// Format time ago
-const formatTimeAgo = (dateString: string): string => {
+// Format time ago with validation
+const formatTimeAgo = (dateString: unknown): string => {
+  if (!dateString || !isValidDate(dateString)) return 'Unknown';
+  
   const now = new Date();
-  const then = new Date(dateString);
+  const then = new Date(dateString as string);
   const diff = Math.floor((now.getTime() - then.getTime()) / 1000);
 
+  if (diff < 0) return 'Just now';
   if (diff < 60) return 'Just now';
   if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
@@ -205,12 +270,13 @@ const formatTimeAgo = (dateString: string): string => {
   return `${Math.floor(diff / 86400)} days ago`;
 };
 
-// Get bias color class
-const getBiasColor = (score: number): string => {
-  if (score <= -2) return 'bg-blue-500';
-  if (score <= -0.5) return 'bg-blue-300';
-  if (score < 0.5) return 'bg-gray-400';
-  if (score < 2) return 'bg-red-300';
+// Get bias color class with validation
+const getBiasColor = (score: unknown): string => {
+  const validatedScore = validateBiasScore(score);
+  if (validatedScore <= -2) return 'bg-blue-500';
+  if (validatedScore <= -0.5) return 'bg-blue-300';
+  if (validatedScore < 0.5) return 'bg-gray-400';
+  if (validatedScore < 2) return 'bg-red-300';
   return 'bg-red-500';
 };
 
@@ -219,31 +285,44 @@ const getBiasGradient = (): string => {
   return 'bg-gradient-to-r from-blue-500 via-gray-300 to-red-500';
 };
 
-// Get bias text color
-const getBiasTextColor = (score: number): string => {
-  if (score <= -2) return 'text-blue-600 dark:text-blue-400';
-  if (score <= -0.5) return 'text-blue-500 dark:text-blue-300';
-  if (score < 0.5) return 'text-gray-600 dark:text-gray-400';
-  if (score < 2) return 'text-red-500 dark:text-red-300';
+// Get bias text color with validation
+const getBiasTextColor = (score: unknown): string => {
+  const validatedScore = validateBiasScore(score);
+  if (validatedScore <= -2) return 'text-blue-600 dark:text-blue-400';
+  if (validatedScore <= -0.5) return 'text-blue-500 dark:text-blue-300';
+  if (validatedScore < 0.5) return 'text-gray-600 dark:text-gray-400';
+  if (validatedScore < 2) return 'text-red-500 dark:text-red-300';
   return 'text-red-600 dark:text-red-400';
 };
 
-// Get reliability badge color
-const getReliabilityBadge = (score: number): { color: string; label: string } => {
-  if (score >= 90) return { color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', label: 'Very High' };
-  if (score >= 75) return { color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400', label: 'High' };
-  if (score >= 60) return { color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', label: 'Medium' };
-  if (score >= 40) return { color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', label: 'Low' };
+// Get reliability badge color with validation
+const getReliabilityBadge = (score: unknown): { color: string; label: string } => {
+  const validatedScore = validateReliabilityScore(score);
+  if (validatedScore >= 90) return { color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400', label: 'Very High' };
+  if (validatedScore >= 75) return { color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400', label: 'High' };
+  if (validatedScore >= 60) return { color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', label: 'Medium' };
+  if (validatedScore >= 40) return { color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', label: 'Low' };
   return { color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', label: 'Very Low' };
 };
 
-// Get outlet initials for avatar fallback
-const getOutletInitials = (source: string): string => {
-  const words = source.split(/[\s-]+/);
+// Get outlet initials for avatar fallback with validation
+const getOutletInitials = (source: unknown): string => {
+  if (!source || typeof source !== 'string') return '??';
+  const words = source.split(/[\s-]+/).filter(w => w.length > 0);
   if (words.length >= 2) {
     return (words[0][0] + words[1][0]).toUpperCase();
   }
   return source.substring(0, 2).toUpperCase();
+};
+
+// Get spectrum label from score
+const getSpectrumLabel = (score: unknown): string => {
+  const validatedScore = validateSpectrumScore(score);
+  if (validatedScore <= -7) return 'Far Left';
+  if (validatedScore <= -3) return 'Left-Leaning';
+  if (validatedScore <= 3) return 'Centrist';
+  if (validatedScore <= 7) return 'Right-Leaning';
+  return 'Far Right';
 };
 
 // Calculate coverage stats
@@ -828,18 +907,27 @@ export default function PoliticalSpectrumApp() {
 
   // ==================== RENDER COMPONENTS ====================
 
-  // Enhanced Headline Card Component
+  // Enhanced Headline Card Component with Validation
   const EnhancedHeadlineCard = ({ headline, onAnalyze }: { headline: Headline; onAnalyze: (h: Headline) => void }) => {
+    // Get outlet info with fallback
     const outlet = getOutletInfo(headline.source.toLowerCase().replace(/\s+/g, '').replace(/[^a-z]/g, '') + '.com') ||
                    Object.values(OUTLET_DATABASE).find(o => o.name.toLowerCase() === headline.source.toLowerCase());
-    const biasScore = outlet?.biasScore || 0;
-    const reliability = outlet?.reliabilityScore || 70;
+    
+    // Validate all numeric values
+    const biasScore = validateBiasScore(outlet?.biasScore ?? 0);
+    const reliability = validateReliabilityScore(outlet?.reliabilityScore ?? 70);
     const reliabilityBadge = getReliabilityBadge(reliability);
+    
+    // Calculate bias position percentage (clamped to 0-100)
+    const biasPosition = Math.max(0, Math.min(100, ((biasScore + 3) / 6) * 100));
+    
+    // Validate URL before displaying
+    const isValidArticleUrl = isValidUrl(headline.url);
 
     return (
       <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer overflow-hidden border-l-4 dark:border-l-2"
         style={{ borderLeftColor: biasScore <= -2 ? '#3b82f6' : biasScore <= -0.5 ? '#93c5fd' : biasScore < 0.5 ? '#9ca3af' : biasScore < 2 ? '#fca5a5' : '#ef4444' }}
-        onClick={() => onAnalyze(headline)}
+        onClick={() => isValidArticleUrl && onAnalyze(headline)}
       >
         <CardContent className="p-4">
           {/* Header with source and badges */}
@@ -851,9 +939,12 @@ export default function PoliticalSpectrumApp() {
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-sm">{headline.source}</span>
+                <span className="font-semibold text-sm">{headline.source || 'Unknown Source'}</span>
                 <Badge className={`text-[10px] px-1.5 py-0 ${reliabilityBadge.color}`}>
                   {reliabilityBadge.label}
+                </Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {reliability}% Reliable
                 </Badge>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
@@ -868,7 +959,7 @@ export default function PoliticalSpectrumApp() {
 
           {/* Headline */}
           <h3 className="font-medium text-sm leading-snug line-clamp-2 mb-3 group-hover:text-primary transition-colors">
-            {headline.headline}
+            {headline.headline || 'Untitled Article'}
           </h3>
 
           {/* Bias indicator bar */}
@@ -884,7 +975,7 @@ export default function PoliticalSpectrumApp() {
             <div className="relative h-2 rounded-full bg-gradient-to-r from-blue-500 via-gray-300 to-red-500 overflow-hidden">
               <div
                 className="absolute top-0 w-1 h-full bg-black dark:bg-white shadow-md transition-all"
-                style={{ left: `${((biasScore + 3) / 6) * 100}%`, transform: 'translateX(-50%)' }}
+                style={{ left: `${biasPosition}%`, transform: 'translateX(-50%)' }}
               />
             </div>
           </div>
@@ -901,12 +992,18 @@ export default function PoliticalSpectrumApp() {
     );
   };
 
-  // Coverage Details Sidebar Component
+  // Coverage Details Sidebar Component with Validation
   const CoverageDetailsSidebar = () => {
-    const total = coverageStats.total;
-    const leftPercent = total > 0 ? Math.round((coverageStats.left / total) * 100) : 0;
-    const centerPercent = total > 0 ? Math.round((coverageStats.center / total) * 100) : 0;
-    const rightPercent = total > 0 ? Math.round((coverageStats.right / total) * 100) : 0;
+    // Validate all counts
+    const total = validateCount(coverageStats.total);
+    const leftCount = validateCount(coverageStats.left);
+    const centerCount = validateCount(coverageStats.center);
+    const rightCount = validateCount(coverageStats.right);
+    
+    // Calculate validated percentages
+    const leftPercent = total > 0 ? validatePercentage(Math.round((leftCount / total) * 100)) : 0;
+    const centerPercent = total > 0 ? validatePercentage(Math.round((centerCount / total) * 100)) : 0;
+    const rightPercent = total > 0 ? validatePercentage(Math.round((rightCount / total) * 100)) : 0;
 
     return (
       <Card className="sticky top-24">
@@ -935,7 +1032,7 @@ export default function PoliticalSpectrumApp() {
                 <span className="text-sm">Leaning Left</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{coverageStats.left}</span>
+                <span className="text-sm font-medium">{leftCount}</span>
                 <span className="text-xs text-muted-foreground">({leftPercent}%)</span>
               </div>
             </div>
@@ -946,7 +1043,7 @@ export default function PoliticalSpectrumApp() {
                 <span className="text-sm">Center</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{coverageStats.center}</span>
+                <span className="text-sm font-medium">{centerCount}</span>
                 <span className="text-xs text-muted-foreground">({centerPercent}%)</span>
               </div>
             </div>
@@ -957,7 +1054,7 @@ export default function PoliticalSpectrumApp() {
                 <span className="text-sm">Leaning Right</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{coverageStats.right}</span>
+                <span className="text-sm font-medium">{rightCount}</span>
                 <span className="text-xs text-muted-foreground">({rightPercent}%)</span>
               </div>
             </div>
@@ -968,13 +1065,13 @@ export default function PoliticalSpectrumApp() {
           {/* Last updated */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="w-4 h-4" />
-            <span>Last Updated: {coverageStats.lastUpdated}</span>
+            <span>Last Updated: {coverageStats.lastUpdated || 'Just now'}</span>
           </div>
 
           {/* Bias distribution bar */}
           <div className="space-y-2">
             <span className="text-sm text-muted-foreground">Bias Distribution</span>
-            <div className="flex h-3 rounded-full overflow-hidden">
+            <div className="flex h-3 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
               <div className="bg-blue-500 transition-all" style={{ width: `${leftPercent}%` }} />
               <div className="bg-gray-400 transition-all" style={{ width: `${centerPercent}%` }} />
               <div className="bg-red-500 transition-all" style={{ width: `${rightPercent}%` }} />
@@ -992,16 +1089,20 @@ export default function PoliticalSpectrumApp() {
           <div className="space-y-2">
             <span className="text-sm text-muted-foreground">Sources</span>
             <div className="grid grid-cols-4 gap-2">
-              {Object.values(OUTLET_DATABASE).slice(0, 12).map((outlet) => (
-                <Avatar key={outlet.domain} className="w-8 h-8">
-                  <AvatarFallback
-                    className={`text-[10px] font-bold text-white ${getBiasColor(outlet.biasScore)}`}
-                    title={`${outlet.name} - ${getBiasLabel(outlet.biasScore)}`}
-                  >
-                    {getOutletInitials(outlet.name)}
-                  </AvatarFallback>
-                </Avatar>
-              ))}
+              {Object.values(OUTLET_DATABASE).slice(0, 12).map((outlet) => {
+                const outletBias = validateBiasScore(outlet.biasScore);
+                const outletReliability = validateReliabilityScore(outlet.reliabilityScore);
+                return (
+                  <Avatar key={outlet.domain} className="w-8 h-8">
+                    <AvatarFallback
+                      className={`text-[10px] font-bold text-white ${getBiasColor(outletBias)}`}
+                      title={`${outlet.name} - ${getBiasLabel(outletBias)} (${outletReliability}% reliability)`}
+                    >
+                      {getOutletInitials(outlet.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                );
+              })}
             </div>
           </div>
         </CardContent>
