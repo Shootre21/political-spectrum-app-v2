@@ -5,7 +5,7 @@
     Automated setup script for the Political Spectrum App with progress tracking,
     logging, error handling, and troubleshooting capabilities.
 .VERSION
-    2.9.1 - Fixed null git handling, improved error handling
+    3.3.1 - DATABASE_URL auto-configuration for Prisma CLI
 .AUTHOR
     Shootre21
 .REPOSITORY
@@ -31,7 +31,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "3.0.2"
+    Version = "3.3.1"
     NodeMinVersion = "18.0.0"
     BunMinVersion = "1.0.0"
     RequiredPorts = @(3000, 5555)
@@ -291,6 +291,10 @@ $ErrorCodes = @{
     E015 = @{
         Message = "SQLite database locked"
         Solution = "Close any applications using the database and try again"
+    }
+    E016 = @{
+        Message = "DATABASE_URL not set for Prisma CLI"
+        Solution = "The script should auto-set this. Check if .env file exists with DATABASE_URL."
     }
 }
 
@@ -766,6 +770,46 @@ function Invoke-DatabaseSetup {
     
     Write-Log "Starting database setup" -Level INFO
     
+    # ============================================
+    # CRITICAL: Set DATABASE_URL for Prisma CLI
+    # ============================================
+    # Prisma CLI needs DATABASE_URL environment variable
+    # The .env file is NOT automatically loaded by npx prisma commands
+    # We must set it in the PowerShell session explicitly
+    
+    $dbUrl = "file:./db/custom.db"
+    $envUrlSet = $false
+    
+    # Check if DATABASE_URL is already set in environment
+    if ($env:DATABASE_URL) {
+        Write-Host "  [OK] DATABASE_URL already set: $($env:DATABASE_URL)" -ForegroundColor Green
+        $envUrlSet = $true
+    } else {
+        # Check .env file for DATABASE_URL
+        if (Test-Path ".env") {
+            $envContent = Get-Content ".env" -Raw -ErrorAction SilentlyContinue
+            if ($envContent -match 'DATABASE_URL\s*=\s*"([^"]+)"') {
+                $dbUrl = $matches[1]
+                Write-Host "  Found DATABASE_URL in .env: $dbUrl" -ForegroundColor Gray
+            }
+        }
+        
+        # Set it for current PowerShell session
+        $env:DATABASE_URL = $dbUrl
+        Write-Host "  [SET] DATABASE_URL = $dbUrl (for this session)" -ForegroundColor Cyan
+        Write-Log "Set DATABASE_URL environment variable for Prisma CLI" -Level INFO
+    }
+    
+    # Verify DATABASE_URL is accessible
+    Write-Host "  Verifying DATABASE_URL is accessible..." -ForegroundColor Gray
+    if (-not $env:DATABASE_URL) {
+        Write-Host "  [ERROR] DATABASE_URL not set! Prisma CLI will fail!" -ForegroundColor Red
+        $error = Get-ErrorSolution "E016"
+        Add-Error "E016" $error.Message $error.Solution -Fatal $false
+    } else {
+        Write-Host "  [OK] DATABASE_URL verified: $($env:DATABASE_URL)" -ForegroundColor Green
+    }
+    
     # Ensure prisma is available (PINNED TO v6.x - v7 has breaking changes!)
     if (-not (Test-Path "node_modules\.bin\prisma") -and -not (Test-CommandExists "prisma")) {
         Add-Warning "W005" "Prisma CLI not found" "Installing Prisma v6..."
@@ -777,9 +821,9 @@ function Invoke-DatabaseSetup {
         }
     }
     
-    # Generate Prisma client
+    # Generate Prisma client (with DATABASE_URL set)
     Write-Log "Generating Prisma client..." -Level INFO
-    Write-Host "  Running: npx prisma generate" -ForegroundColor Gray
+    Write-Host "  Running: npx prisma generate (DATABASE_URL=$($env:DATABASE_URL))" -ForegroundColor Gray
     try {
         $prismaOutput = npx prisma generate 2>&1
         if ($LASTEXITCODE -eq 0) {
@@ -795,7 +839,7 @@ function Invoke-DatabaseSetup {
         Write-Host "  [WARN] Prisma generate error: $_" -ForegroundColor Yellow
     }
     
-    # Run migrations
+    # Run migrations (with DATABASE_URL set)
     Write-Log "Running database migrations..." -Level INFO
     
     # Check for existing database in various locations
@@ -803,7 +847,7 @@ function Invoke-DatabaseSetup {
     
     if (-not $dbExists) {
         try {
-            Write-Host "  Running: npx prisma db push" -ForegroundColor Gray
+            Write-Host "  Running: npx prisma db push (DATABASE_URL=$($env:DATABASE_URL))" -ForegroundColor Gray
             $pushResult = npx prisma db push 2>&1
             if ($LASTEXITCODE -eq 0) {
                 Write-Log "Database schema pushed successfully" -Level SUCCESS
