@@ -5,6 +5,41 @@ All notable changes to the Political News Spectrum app will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.2] - 2026-03-24
+
+### New Features
+
+#### Blindspot Alert
+A new feature that alerts users when there's significant coverage disparity between political leanings.
+
+- **Blindspot Alert Component**
+  - Automatically calculates coverage disparity between Left and Right outlets
+  - Shows alert when one side has 20%+ more coverage than the other
+  - Color-coded alerts: Red border for Right undercoverage, Blue for Left undercoverage
+  - Mini coverage distribution chart within the alert
+
+- **Alert Display**
+  - Shows percentage difference in coverage
+  - Displays article counts for each leaning
+  - Visual progress bars for Left/Center/Right distribution
+  - Encourages exploring diverse sources
+
+### Technical Details
+
+| Component | Change |
+|-----------|--------|
+| BlindspotAlert | NEW - Coverage disparity detection and alert |
+| Headlines View | Updated - Added Blindspot Alert before articles |
+
+### User Benefit
+
+This feature helps users understand potential media blindspots and encourages them to:
+- Seek out diverse perspectives
+- Understand coverage gaps in current news
+- Make more informed decisions about their news consumption
+
+---
+
 ## [3.4.1] - 2026-03-24
 
 ### New Features
@@ -308,6 +343,7 @@ If you weren't using AI:
 
 | Version | Name | Key Feature |
 |---------|------|-------------|
+| 3.4.2 | Blindspot Alert | Coverage disparity detection & alerts |
 | 3.4.1 | Validation & Data Integrity | All numbers validated and clamped |
 | 3.4.0 | Enhanced UI & Coverage | New headline cards, coverage sidebar, topics |
 | 3.3.1 | Windows Fix | Cross-platform Prisma scripts |
@@ -321,6 +357,7 @@ If you weren't using AI:
 
 ---
 
+[3.4.2]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.3.1...v3.4.0
 [3.3.1]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.3.0...v3.3.1

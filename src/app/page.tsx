@@ -1157,6 +1157,107 @@ export default function PoliticalSpectrumApp() {
     </Card>
   );
 
+  // Blindspot Alert Component - Shows coverage disparity
+  const BlindspotAlert = () => {
+    // Calculate coverage stats with validation
+    const leftCount = validateCount(coverageStats.left);
+    const rightCount = validateCount(coverageStats.right);
+    const centerCount = validateCount(coverageStats.center);
+    const total = validateCount(coverageStats.total);
+
+    // Calculate percentages
+    const leftPercent = total > 0 ? Math.round((leftCount / total) * 100) : 0;
+    const rightPercent = total > 0 ? Math.round((rightCount / total) * 100) : 0;
+
+    // Calculate coverage disparity
+    const disparity = leftPercent - rightPercent;
+    const absDisparity = Math.abs(disparity);
+
+    // Only show alert if there's significant disparity (more than 20% difference)
+    if (absDisparity < 20 || total < 5) return null;
+
+    // Determine which side has more coverage
+    const moreCoverage = disparity > 0 ? 'Left' : 'Right';
+    const lessCoverage = disparity > 0 ? 'Right' : 'Left';
+    const disparityPercent = absDisparity;
+
+    // Get appropriate colors based on which side is undercovered
+    const alertColor = moreCoverage === 'Left'
+      ? 'border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800'
+      : 'border-blue-300 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800';
+    const textColor = moreCoverage === 'Left'
+      ? 'text-red-700 dark:text-red-400'
+      : 'text-blue-700 dark:text-blue-400';
+    const iconColor = moreCoverage === 'Left' ? 'text-red-500' : 'text-blue-500';
+
+    return (
+      <Card className={`border-2 ${alertColor} shadow-md`}>
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-full ${moreCoverage === 'Left' ? 'bg-red-100 dark:bg-red-900/50' : 'bg-blue-100 dark:bg-blue-900/50'}`}>
+              <AlertCircle className={`w-5 h-5 ${iconColor}`} />
+            </div>
+            <div className="flex-1">
+              <h3 className={`font-bold text-sm ${textColor} flex items-center gap-2`}>
+                Blindspot Alert
+                <Badge variant="outline" className={`text-[10px] ${moreCoverage === 'Left' ? 'border-red-400 text-red-600' : 'border-blue-400 text-blue-600'}`}>
+                  Coverage Gap
+                </Badge>
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Current coverage shows <strong>{disparityPercent}% more</strong> articles from{' '}
+                <span className={moreCoverage === 'Left' ? 'text-blue-600 font-medium' : 'text-red-600 font-medium'}>
+                  {moreCoverage}-leaning
+                </span> outlets compared to{' '}
+                <span className={lessCoverage === 'Left' ? 'text-blue-600 font-medium' : 'text-red-600 font-medium'}>
+                  {lessCoverage}-leaning
+                </span> ones.
+              </p>
+
+              {/* Coverage distribution mini chart */}
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-16 text-blue-600 dark:text-blue-400">Left: {leftPercent}%</span>
+                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all duration-500"
+                      style={{ width: `${validatePercentage(leftPercent)}%` }}
+                    />
+                  </div>
+                  <span className="w-12 text-right text-muted-foreground">{leftCount} articles</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-16 text-gray-600 dark:text-gray-400">Center: {Math.round((centerCount / Math.max(1, total)) * 100)}%</span>
+                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gray-400 transition-all duration-500"
+                      style={{ width: `${validatePercentage(Math.round((centerCount / Math.max(1, total)) * 100))}%` }}
+                    />
+                  </div>
+                  <span className="w-12 text-right text-muted-foreground">{centerCount} articles</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-16 text-red-600 dark:text-red-400">Right: {rightPercent}%</span>
+                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-red-500 transition-all duration-500"
+                      style={{ width: `${validatePercentage(rightPercent)}%` }}
+                    />
+                  </div>
+                  <span className="w-12 text-right text-muted-foreground">{rightCount} articles</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-3 italic">
+                Consider exploring diverse sources to get a more balanced perspective on current events.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   // Other News Sources Section Component
   const OtherNewsSourcesSection = () => (
     <Card>
@@ -1313,6 +1414,9 @@ export default function PoliticalSpectrumApp() {
                 </div>
               ) : (
                 <>
+                  {/* Blindspot Alert - Shows coverage disparity */}
+                  <BlindspotAlert />
+
                   {/* Left Column */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">

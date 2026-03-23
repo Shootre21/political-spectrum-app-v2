@@ -1,10 +1,22 @@
 {
-  "version": "3.4.1",
-  "versionName": "Validation & Enhanced Features",
+  "version": "3.4.2",
+  "versionName": "Blindspot Alert Feature",
   "releaseDate": "2026-03-24",
-  "buildNumber": 341,
+  "buildNumber": 342,
   "github": "https://github.com/Shootre21/political-spectrum-app-v2",
   "changelog": [
+    {
+      "version": "3.4.2",
+      "date": "2026-03-24",
+      "changes": [
+        "NEW: Blindspot Alert - Shows coverage disparity between political leanings",
+        "NEW: Visual warning when one side has 20%+ more coverage than the other",
+        "NEW: Mini coverage distribution chart within alert",
+        "NEW: Color-coded alerts (red for right undercoverage, blue for left undercoverage)",
+        "IMPROVED: Better awareness of media bias and coverage gaps",
+        "IMPROVED: Encourages exploring diverse sources for balanced perspective"
+      ]
+    },
     {
       "version": "3.4.1",
       "date": "2026-03-24",
