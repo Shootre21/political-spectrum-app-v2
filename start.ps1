@@ -5,7 +5,7 @@
     Starts the development server with health checks, error handling, real-time monitoring,
     and automatic git update detection.
 .VERSION
-    2.9.0
+    2.9.1
 #>
 
 param(
@@ -22,7 +22,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.9.0"
+    Version = "2.9.1"
     GitRepo = "https://github.com/Shootre21/political-spectrum-app-v2"
 }
 
@@ -87,17 +87,33 @@ function Test-CommandExists {
 # ============================================
 function Get-GitCurrentBranch {
     try {
+        # Check if we're in a git repo first
+        $inRepo = git rev-parse --is-inside-work-tree 2>$null
+        if ($inRepo -ne "true") {
+            return $null
+        }
         $branch = git rev-parse --abbrev-ref HEAD 2>$null
-        return $branch.Trim()
+        if ($branch) {
+            return $branch.Trim()
+        }
+        return $null
     } catch {
-        return "master"
+        return $null
     }
 }
 
 function Get-GitLocalHash {
     try {
+        # Check if we're in a git repo first
+        $inRepo = git rev-parse --is-inside-work-tree 2>$null
+        if ($inRepo -ne "true") {
+            return $null
+        }
         $hash = git rev-parse HEAD 2>$null
-        return $hash.Trim()
+        if ($hash) {
+            return $hash.Trim()
+        }
+        return $null
     } catch {
         return $null
     }
@@ -107,12 +123,21 @@ function Get-GitRemoteHash {
     param([string]$Branch = "master")
     
     try {
+        # Check if we're in a git repo first
+        $inRepo = git rev-parse --is-inside-work-tree 2>$null
+        if ($inRepo -ne "true") {
+            return $null
+        }
+        
         # Fetch latest from remote (quietly)
         git fetch origin $Branch 2>$null | Out-Null
         
         # Get remote HEAD hash
         $hash = git rev-parse "origin/$Branch" 2>$null
-        return $hash.Trim()
+        if ($hash) {
+            return $hash.Trim()
+        }
+        return $null
     } catch {
         return $null
     }
@@ -120,6 +145,15 @@ function Get-GitRemoteHash {
 
 function Test-GitUpdates {
     $branch = Get-GitCurrentBranch
+    if (-not $branch) {
+        return @{
+            HasUpdates = $false
+            LocalHash = $null
+            RemoteHash = $null
+            Branch = $null
+        }
+    }
+    
     $localHash = Get-GitLocalHash
     $remoteHash = Get-GitRemoteHash -Branch $branch
     

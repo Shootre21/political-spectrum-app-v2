@@ -5,7 +5,7 @@
     Automated setup script for the Political Spectrum App with progress tracking,
     logging, error handling, and troubleshooting capabilities.
 .VERSION
-    2.9.0 - Auto-update from Git, real-time server monitoring
+    2.9.1 - Fixed null git handling, improved error handling
 .AUTHOR
     Shootre21
 .REPOSITORY
@@ -31,7 +31,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.9.0"
+    Version = "2.9.1"
     NodeMinVersion = "18.0.0"
     BunMinVersion = "1.0.0"
     RequiredPorts = @(3000, 5555)
@@ -1111,17 +1111,33 @@ $Script:UpdateInterval = 10  # Check for updates every 10 seconds
 # Git Update Functions
 function Get-GitCurrentBranch {
     try {
+        # Check if we're in a git repo first
+        $inRepo = git rev-parse --is-inside-work-tree 2>$null
+        if ($inRepo -ne "true") {
+            return $null
+        }
         $branch = git rev-parse --abbrev-ref HEAD 2>$null
-        return $branch.Trim()
+        if ($branch) {
+            return $branch.Trim()
+        }
+        return $null
     } catch {
-        return "master"
+        return $null
     }
 }
 
 function Get-GitLocalHash {
     try {
+        # Check if we're in a git repo first
+        $inRepo = git rev-parse --is-inside-work-tree 2>$null
+        if ($inRepo -ne "true") {
+            return $null
+        }
         $hash = git rev-parse HEAD 2>$null
-        return $hash.Trim()
+        if ($hash) {
+            return $hash.Trim()
+        }
+        return $null
     } catch {
         return $null
     }
@@ -1131,9 +1147,18 @@ function Get-GitRemoteHash {
     param([string]$Branch = "master")
     
     try {
+        # Check if we're in a git repo first
+        $inRepo = git rev-parse --is-inside-work-tree 2>$null
+        if ($inRepo -ne "true") {
+            return $null
+        }
+        
         git fetch origin $Branch 2>$null | Out-Null
         $hash = git rev-parse "origin/$Branch" 2>$null
-        return $hash.Trim()
+        if ($hash) {
+            return $hash.Trim()
+        }
+        return $null
     } catch {
         return $null
     }
@@ -1141,6 +1166,15 @@ function Get-GitRemoteHash {
 
 function Test-GitUpdates {
     $branch = Get-GitCurrentBranch
+    if (-not $branch) {
+        return @{
+            HasUpdates = $false
+            LocalHash = $null
+            RemoteHash = $null
+            Branch = $null
+        }
+    }
+    
     $localHash = Get-GitLocalHash
     $remoteHash = Get-GitRemoteHash -Branch $branch
     
@@ -1282,12 +1316,20 @@ function Start-DevServer {
     
     Write-Log "Starting development server..." -Level INFO
     
-    # Initialize git tracking if git is available
+    # Initialize git tracking if git is available AND we're in a git repo
     if (Test-CommandExists "git") {
         $Script:LastCommitHash = Get-GitLocalHash
-        Write-Host ""
-        Write-Host "  [UPDATE] Git tracking enabled (checking every $Script:UpdateInterval seconds)" -ForegroundColor Magenta
-        Write-Host "  [UPDATE] Current commit: $($Script:LastCommitHash.Substring(0,7))" -ForegroundColor Magenta
+        $branch = Get-GitCurrentBranch
+        
+        if ($Script:LastCommitHash) {
+            Write-Host ""
+            Write-Host "  [UPDATE] Git tracking enabled (checking every $Script:UpdateInterval seconds)" -ForegroundColor Magenta
+            Write-Host "  [UPDATE] Branch: $branch | Commit: $($Script:LastCommitHash.Substring(0,7))" -ForegroundColor Magenta
+        } else {
+            Write-Host ""
+            Write-Host "  [INFO] Not in a git repository - auto-update disabled" -ForegroundColor Gray
+            Write-Host "  [INFO] Clone with 'git clone' to enable auto-updates" -ForegroundColor Gray
+        }
     }
     
     Start-DevServerInternal
@@ -1350,18 +1392,27 @@ function Start-DevServerInternal {
     $Script:ServerProcess = New-Object System.Diagnostics.Process
     $Script:ServerProcess.StartInfo = $psi
     
-    # Register cleanup on exit
-    [Console]::TreatControlCAsInput = $false
-    [Console]::CancelKeyPress.Add_Handler({
-        param($sender, $e)
-        $e.Cancel = $true
-        Stop-DevServer
-        exit 0
-    }.GetNewClosure())
+    # Register cleanup on exit - use try/finally for reliability
+    # Note: [Console]::CancelKeyPress doesn't work in all PowerShell hosts
+    try {
+        [Console]::TreatControlCAsInput = $false
+        [Console]::CancelKeyPress.Add_Handler({
+            param($sender, $e)
+            $e.Cancel = $true
+            Stop-DevServer
+            exit 0
+        }.GetNewClosure()) -ErrorAction SilentlyContinue
+    } catch {
+        # Ignore errors - cleanup will still happen via PowerShell.Exiting
+    }
     
-    # Also register for PowerShell engine shutdown
+    # Register for PowerShell engine shutdown (works in all hosts)
     Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
-        Stop-DevServer
+        if ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
+            try {
+                $Script:ServerProcess.Kill()
+            } catch {}
+        }
     } -ErrorAction SilentlyContinue
     
     try {
