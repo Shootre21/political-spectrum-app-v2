@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import analyzeArticle, { type BiasAnalysisResult, type HeadlineData } from '@/lib/bias-engine';
-import { db } from '@/lib/db';
 
 /**
  * Algorithm Analysis API - PRIMARY METHOD
  * 
  * This endpoint provides algorithm-based bias analysis.
  * NO API KEYS REQUIRED - Works 100% locally.
+ * NO DATABASE REQUIRED - Works even if database is not configured.
  * 
  * Flow:
- * 1. Article is stored in database (if not exists)
- * 2. Algorithm analyzes the article
- * 3. Analysis results are stored and returned
+ * 1. Algorithm analyzes the article (ALWAYS works)
+ * 2. Try to store in database (optional, fails gracefully)
+ * 3. Return analysis results
  * 
  * This is the DEFAULT analysis method.
  */
@@ -30,16 +30,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Algorithm] Analyzing: "${headline}" from ${source}`);
 
-    // Check if article already analyzed with algorithm
-    const existingArticle = await db.article.findFirst({
-      where: {
-        title: headline,
-        source: source,
-        aiProvider: 'algorithm',
-      },
-    });
-
-    // Run algorithm analysis (ALWAYS works, no AI needed)
+    // Run algorithm analysis (ALWAYS works, no AI needed, no database needed)
     const analysis = analyzeArticle({
       headline,
       source,
@@ -50,43 +41,55 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Algorithm] Analysis complete. Bias: ${analysis.finalBias.toFixed(2)}, Confidence: ${(analysis.confidence * 100).toFixed(0)}%`);
 
-    // Store/update in database - THIS ALWAYS HAPPENS
-    const articleData = {
-      id: existingArticle?.id || crypto.randomUUID(),
-      title: headline,
-      url: url || '',
-      source: source,
-      publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
-      category: analysis.evidence.topics[0] || 'Politics',
-      spectrumScore: analysis.finalBias * 3.33, // Convert -3 to +3 scale to -10 to +10
-      popularityScore: 'Medium',
-      leftWingSummary: analysis.evidence.framingTerms
-        .filter(t => t.leaning === 'left')
-        .map(t => t.term)
-        .slice(0, 3)
-        .join(', ') || 'No specific left-framing detected',
-      rightWingSummary: analysis.evidence.framingTerms
-        .filter(t => t.leaning === 'right')
-        .map(t => t.term)
-        .slice(0, 3)
-        .join(', ') || 'No specific right-framing detected',
-      socialistSummary: analysis.evidence.socialistMarkers.join(', ') || null,
-      leftWingPoints: JSON.stringify(analysis.evidence.framingTerms.filter(t => t.leaning === 'left').map(t => t.term)),
-      rightWingPoints: JSON.stringify(analysis.evidence.framingTerms.filter(t => t.leaning === 'right').map(t => t.term)),
-      socialistPoints: JSON.stringify(analysis.evidence.socialistMarkers),
-      spectrumJustification: `Outlet baseline: ${analysis.outletLabel}. Article framing deviation: ${analysis.articleDelta > 0 ? '+' : ''}${analysis.articleDelta.toFixed(2)}. Tags: ${analysis.tags.join(', ')}`,
-      outletBias: analysis.outletBias,
-      articleDelta: analysis.articleDelta,
-      evidence: JSON.stringify(analysis.evidence),
-      tags: JSON.stringify(analysis.tags),
-      confidence: analysis.confidence,
-      analysisMethod: 'algorithm',
-      wasEdited: false,
-      aiProvider: 'algorithm',
-      updatedAt: new Date(),
-    };
-
+    // Try to store in database (OPTIONAL - fails gracefully)
+    let databaseStored = false;
     try {
+      // Dynamically import db to avoid issues if not configured
+      const { db } = await import('@/lib/db');
+      
+      // Check if article already exists
+      const existingArticle = await db.article.findFirst({
+        where: {
+          title: headline,
+          source: source,
+        },
+      });
+
+      const articleData = {
+        id: existingArticle?.id || crypto.randomUUID(),
+        title: headline,
+        url: url || '',
+        source: source,
+        publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+        category: analysis.evidence.topics[0] || 'Politics',
+        spectrumScore: analysis.finalBias * 3.33,
+        popularityScore: 'Medium',
+        leftWingSummary: analysis.evidence.framingTerms
+          .filter(t => t.leaning === 'left')
+          .map(t => t.term)
+          .slice(0, 3)
+          .join(', ') || 'No specific left-framing detected',
+        rightWingSummary: analysis.evidence.framingTerms
+          .filter(t => t.leaning === 'right')
+          .map(t => t.term)
+          .slice(0, 3)
+          .join(', ') || 'No specific right-framing detected',
+        socialistSummary: analysis.evidence.socialistMarkers.join(', ') || null,
+        leftWingPoints: JSON.stringify(analysis.evidence.framingTerms.filter(t => t.leaning === 'left').map(t => t.term)),
+        rightWingPoints: JSON.stringify(analysis.evidence.framingTerms.filter(t => t.leaning === 'right').map(t => t.term)),
+        socialistPoints: JSON.stringify(analysis.evidence.socialistMarkers),
+        spectrumJustification: analysis.spectrumJustification,
+        outletBias: analysis.outletBias,
+        articleDelta: analysis.articleDelta,
+        evidence: JSON.stringify(analysis.evidence),
+        tags: JSON.stringify(analysis.tags),
+        confidence: analysis.confidence,
+        analysisMethod: 'algorithm',
+        wasEdited: false,
+        aiProvider: 'algorithm',
+        updatedAt: new Date(),
+      };
+
       if (existingArticle) {
         await db.article.update({
           where: { id: existingArticle.id },
@@ -97,10 +100,12 @@ export async function POST(request: NextRequest) {
           data: articleData,
         });
       }
+      
+      databaseStored = true;
       console.log(`[Algorithm] Article stored in database`);
     } catch (dbError) {
-      console.error('[Algorithm] Database error:', dbError);
-      // Continue without storing - analysis still works
+      // Database not configured or error - CONTINUE ANYWAY
+      console.log('[Algorithm] Database not available, skipping storage:', dbError instanceof Error ? dbError.message : 'Unknown error');
     }
 
     // Format response for frontend compatibility
@@ -156,6 +161,7 @@ export async function POST(request: NextRequest) {
       model: 'v2.0.0 - 3-Layer Scoring Pipeline',
       cached: false,
       method: 'algorithm',
+      databaseStored,
     };
 
     return NextResponse.json(response);
