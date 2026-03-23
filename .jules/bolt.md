@@ -1,0 +1,3 @@
+## 2024-06-25 - [Pre-compiling RegEx inside lexicons.ts]
+**Learning:** Dynamically instantiating RegExp objects with `new RegExp(...)` within hot loops inside the framing text analysis engine (`calculateFramingScore` and `calculateEmotionalScore`) causes a significant and measurable performance bottleneck. The codebase relies heavily on overlapping substring matching (via `String.prototype.match()` with the `gi` flags) over many strings.
+**Action:** Always pre-compile standard RegExp arrays outside the execution path. When string counting overlapping matches with `String.prototype.match`, we can safely reuse global (`g`) RegExp instances without carrying over `lastIndex` state, which would otherwise lead to bugs if used via `RegExp.prototype.test()`.
