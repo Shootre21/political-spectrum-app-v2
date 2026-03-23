@@ -3,18 +3,18 @@
     Political Spectrum App - Quick Start Script
 .DESCRIPTION
     Starts the development server with health checks, error handling, real-time monitoring,
-    and automatic git update detection.
+    automatic git update detection, and interactive management commands.
 .VERSION
-    2.9.1
+    3.0.0
 #>
 
 param(
     [switch]$Prod,
     [switch]$Studio,
     [switch]$NoMonitor,
-    [switch]$NoAutoUpdate,    # Disable auto-update checking
+    [switch]$NoAutoUpdate,
     [int]$Port = 3000,
-    [int]$UpdateInterval = 10  # Check for updates every X seconds
+    [int]$UpdateInterval = 10
 )
 
 # ============================================
@@ -22,7 +22,7 @@ param(
 # ============================================
 $Config = @{
     AppName = "Political Spectrum App"
-    Version = "2.9.1"
+    Version = "3.0.0"
     GitRepo = "https://github.com/Shootre21/political-spectrum-app-v2"
 }
 
@@ -34,6 +34,10 @@ $Script:ServerLogPath = ".\server.log"
 $Script:LastCommitHash = $null
 $Script:UpdateAvailable = $false
 $Script:Restarting = $false
+$Script:LocalIP = $null
+$Script:RequestCount = 0
+$Script:ErrorCount = 0
+$Script:StartTime = $null
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -41,7 +45,7 @@ $Script:Restarting = $false
 function Write-Header {
     param([string]$Title)
     
-    $width = 60
+    $width = 70
     $padding = [Math]::Max(0, ($width - $Title.Length) / 2)
     
     Write-Host ""
@@ -63,6 +67,7 @@ function Write-Log {
         "ERROR" { "[ERROR]" }
         "WARN" { "[WARN]" }
         "SUCCESS" { "[OK]" }
+        "MENU" { "[MENU]" }
         default { "[INFO]" }
     }
     
@@ -71,6 +76,7 @@ function Write-Log {
         "ERROR" { "Red" }
         "WARN" { "Yellow" }
         "SUCCESS" { "Green" }
+        "MENU" { "Cyan" }
         default { "Gray" }
     }
     
@@ -82,20 +88,79 @@ function Test-CommandExists {
     return $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
 }
 
+function Get-LocalIPAddress {
+    try {
+        $ip = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi","Ethernet","Ethernet*","Wi-Fi*" -ErrorAction SilentlyContinue | 
+               Where-Object { $_.IPAddress -notlike "127.*" } | 
+               Select-Object -First 1).IPAddress
+        
+        if (-not $ip) {
+            $ip = (Get-NetIPAddress -AddressFamily IPv4 | 
+                   Where-Object { $_.IPAddress -notlike "127.*" -and $_.PrefixOrigin -eq "Dhcp" } | 
+                   Select-Object -First 1).IPAddress
+        }
+        
+        return $ip
+    } catch {
+        try {
+            $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike "127.*" }).IPAddress
+            return $ip
+        } catch {
+            return "Unknown"
+        }
+    }
+}
+
+# ============================================
+# DATABASE FUNCTIONS
+# ============================================
+function Get-DatabaseStatus {
+    $dbPaths = @(
+        Join-Path $PWD "db\custom.db"
+        Join-Path $PWD "prisma\dev.db"
+        Join-Path $PWD "dev.db"
+    )
+    
+    $status = @{
+        Type     = "SQLite"
+        Location = $null
+        Exists   = $false
+        Size     = 0
+        Live     = $false
+        Port     = "N/A (file-based)"
+        Error    = $null
+    }
+    
+    foreach ($dbPath in $dbPaths) {
+        if (Test-Path $dbPath) {
+            $status.Location = $dbPath
+            $status.Exists = $true
+            $fileInfo = Get-Item $dbPath
+            $status.Size = $fileInfo.Length
+            break
+        }
+    }
+    
+    # Test database connection via API
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/analytics?type=overview" -TimeoutSec 3 -ErrorAction Stop
+        $status.Live = $true
+    } catch {
+        $status.Error = $_.Exception.Message
+    }
+    
+    return [PSCustomObject]$status
+}
+
 # ============================================
 # GIT UPDATE SYSTEM
 # ============================================
 function Get-GitCurrentBranch {
     try {
-        # Check if we're in a git repo first
         $inRepo = git rev-parse --is-inside-work-tree 2>$null
-        if ($inRepo -ne "true") {
-            return $null
-        }
+        if ($inRepo -ne "true") { return $null }
         $branch = git rev-parse --abbrev-ref HEAD 2>$null
-        if ($branch) {
-            return $branch.Trim()
-        }
+        if ($branch) { return $branch.Trim() }
         return $null
     } catch {
         return $null
@@ -104,15 +169,10 @@ function Get-GitCurrentBranch {
 
 function Get-GitLocalHash {
     try {
-        # Check if we're in a git repo first
         $inRepo = git rev-parse --is-inside-work-tree 2>$null
-        if ($inRepo -ne "true") {
-            return $null
-        }
+        if ($inRepo -ne "true") { return $null }
         $hash = git rev-parse HEAD 2>$null
-        if ($hash) {
-            return $hash.Trim()
-        }
+        if ($hash) { return $hash.Trim() }
         return $null
     } catch {
         return $null
@@ -121,22 +181,12 @@ function Get-GitLocalHash {
 
 function Get-GitRemoteHash {
     param([string]$Branch = "master")
-    
     try {
-        # Check if we're in a git repo first
         $inRepo = git rev-parse --is-inside-work-tree 2>$null
-        if ($inRepo -ne "true") {
-            return $null
-        }
-        
-        # Fetch latest from remote (quietly)
+        if ($inRepo -ne "true") { return $null }
         git fetch origin $Branch 2>$null | Out-Null
-        
-        # Get remote HEAD hash
         $hash = git rev-parse "origin/$Branch" 2>$null
-        if ($hash) {
-            return $hash.Trim()
-        }
+        if ($hash) { return $hash.Trim() }
         return $null
     } catch {
         return $null
@@ -146,32 +196,17 @@ function Get-GitRemoteHash {
 function Test-GitUpdates {
     $branch = Get-GitCurrentBranch
     if (-not $branch) {
-        return @{
-            HasUpdates = $false
-            LocalHash = $null
-            RemoteHash = $null
-            Branch = $null
-        }
+        return @{ HasUpdates = $false; LocalHash = $null; RemoteHash = $null; Branch = $null }
     }
     
     $localHash = Get-GitLocalHash
     $remoteHash = Get-GitRemoteHash -Branch $branch
     
     if ($localHash -and $remoteHash -and $localHash -ne $remoteHash) {
-        return @{
-            HasUpdates = $true
-            LocalHash = $localHash
-            RemoteHash = $remoteHash
-            Branch = $branch
-        }
+        return @{ HasUpdates = $true; LocalHash = $localHash; RemoteHash = $remoteHash; Branch = $branch }
     }
     
-    return @{
-        HasUpdates = $false
-        LocalHash = $localHash
-        RemoteHash = $remoteHash
-        Branch = $branch
-    }
+    return @{ HasUpdates = $false; LocalHash = $localHash; RemoteHash = $remoteHash; Branch = $branch }
 }
 
 function Invoke-GitPull {
@@ -180,30 +215,17 @@ function Invoke-GitPull {
     Write-Log "Pulling latest changes from origin/$Branch..." -Level "UPDATE"
     
     try {
-        # Stash any local changes
         $stashResult = git stash 2>&1
         $hasStash = $stashResult -notmatch "No local changes"
-        
-        # Pull changes
         $pullResult = git pull origin $Branch 2>&1
         
         if ($LASTEXITCODE -eq 0) {
             Write-Log "Successfully pulled updates!" -Level "SUCCESS"
-            
-            # Restore stashed changes if any
-            if ($hasStash) {
-                git stash pop 2>&1 | Out-Null
-            }
-            
+            if ($hasStash) { git stash pop 2>&1 | Out-Null }
             return $true
         } else {
             Write-Log "Pull failed: $pullResult" -Level "ERROR"
-            
-            # Restore stashed changes on failure
-            if ($hasStash) {
-                git stash pop 2>&1 | Out-Null
-            }
-            
+            if ($hasStash) { git stash pop 2>&1 | Out-Null }
             return $false
         }
     } catch {
@@ -213,12 +235,6 @@ function Invoke-GitPull {
 }
 
 function Invoke-AutoUpdate {
-    param(
-        [bool]$RestartServer = $true,
-        [ref]$RequestCount,
-        [ref]$ErrorCount
-    )
-    
     Write-Host ""
     Write-Host "  ============================================================" -ForegroundColor Magenta
     Write-Host "  GIT UPDATE DETECTED!" -ForegroundColor Magenta
@@ -232,56 +248,224 @@ function Invoke-AutoUpdate {
         Write-Log "Local:  $($updateInfo.LocalHash.Substring(0,7))" -Level "UPDATE"
         Write-Log "Remote: $($updateInfo.RemoteHash.Substring(0,7))" -Level "UPDATE"
         
-        # Stop server
-        if ($RestartServer -and $Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
+        if ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
             Write-Log "Stopping server for update..." -Level "UPDATE"
             Stop-DevServer
         }
         
-        # Pull changes
         $success = Invoke-GitPull -Branch $branch
         
         if ($success) {
-            # Check if dependencies need update
             if (Test-Path "package.json") {
                 Write-Log "Checking for dependency updates..." -Level "UPDATE"
-                
                 $pkgMgr = if (Test-CommandExists "bun") { "bun" } else { "npm" }
                 & $pkgMgr install 2>&1 | Out-Null
-                
                 Write-Log "Dependencies updated" -Level "SUCCESS"
             }
             
-            # Regenerate Prisma client if schema changed
             if (Test-Path "prisma\schema.prisma") {
                 Write-Log "Checking Prisma schema..." -Level "UPDATE"
                 npx prisma generate 2>&1 | Out-Null
             }
             
-            if ($RestartServer) {
-                Write-Log "Restarting server..." -Level "UPDATE"
-                $Script:Restarting = $true
-                
-                Start-Sleep -Seconds 2
-                
-                # Restart the server
-                Start-DevServerInternal
-                
-                Write-Host ""
-                Write-Host "  ============================================================" -ForegroundColor Green
-                Write-Host "  UPDATE COMPLETE - Server restarted!" -ForegroundColor Green
-                Write-Host "  ============================================================" -ForegroundColor Green
-                Write-Host ""
-                
-                # Reset counters on restart
-                if ($RequestCount) { $RequestCount.Value = 0 }
-                if ($ErrorCount) { $ErrorCount.Value = 0 }
-            }
+            Write-Log "Restarting server..." -Level "UPDATE"
+            $Script:Restarting = $true
+            Start-Sleep -Seconds 2
+            Start-DevServerInternal
+            
+            Write-Host ""
+            Write-Host "  ============================================================" -ForegroundColor Green
+            Write-Host "  UPDATE COMPLETE - Server restarted!" -ForegroundColor Green
+            Write-Host "  ============================================================" -ForegroundColor Green
+            Write-Host ""
+            
+            $Script:RequestCount = 0
+            $Script:ErrorCount = 0
         }
     }
     
     $Script:LastCommitHash = Get-GitLocalHash
     $Script:Restarting = $false
+}
+
+# ============================================
+# HEALTH & DIAGNOSTICS
+# ============================================
+function Test-AppHealth {
+    Write-Header "Health Check"
+    
+    $health = @{
+        App       = $false
+        Database  = $false
+        API       = $false
+    }
+    
+    Write-ColorText "  Testing App (localhost:$Port)... " "Cyan" -NoNewline
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:$Port" -TimeoutSec 5 -UseBasicParsing
+        if ($response.StatusCode -eq 200) {
+            $health.App = $true
+            Write-ColorText "OK" "Green"
+        } else {
+            Write-ColorText "FAILED (Status: $($response.StatusCode))" "Red"
+        }
+    } catch {
+        Write-ColorText "FAILED - $($_.Exception.Message)" "Red"
+    }
+    
+    Write-ColorText "  Testing API (/api/version)... " "Cyan" -NoNewline
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/version" -TimeoutSec 5
+        $health.API = $true
+        Write-ColorText "OK (v$($response.version))" "Green"
+    } catch {
+        Write-ColorText "FAILED" "Red"
+    }
+    
+    Write-ColorText "  Testing Database... " "Cyan" -NoNewline
+    try {
+        $response = Invoke-RestMethod -Uri "http://localhost:$Port/api/analytics?type=overview" -TimeoutSec 5
+        $health.Database = $true
+        Write-ColorText "OK ($($response.totalArticles) articles)" "Green"
+    } catch {
+        Write-ColorText "FAILED" "Red"
+    }
+    
+    Write-Host ""
+    $allHealthy = $health.App -and $health.Database -and $health.API
+    if ($allHealthy) {
+        Write-ColorText "  Status: ALL SYSTEMS HEALTHY" "Green"
+    } else {
+        Write-ColorText "  Status: ISSUES DETECTED" "Red"
+    }
+    
+    return $health
+}
+
+function Show-Diagnostics {
+    Write-Header "Full Diagnostics"
+    
+    # Network Info
+    Write-Section "Network Information"
+    Write-ColorText "  Local IP:        " "Gray" -NoNewline
+    Write-ColorText $Script:LocalIP "White"
+    Write-ColorText "  App URL:         " "Gray" -NoNewline
+    Write-ColorText "http://$($Script:LocalIP):$Port" "Green"
+    Write-ColorText "  Local URL:       " "Gray" -NoNewline
+    Write-ColorText "http://localhost:$Port" "Green"
+    
+    # Port Status
+    Write-Section "Port Status"
+    $portStatus = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    if ($portStatus) {
+        Write-ColorText "  Port $Port`:       LISTENING" "Green"
+        $proc = Get-Process -Id $portStatus.OwningProcess -ErrorAction SilentlyContinue
+        if ($proc) {
+            Write-ColorText "  Process:         " "Gray" -NoNewline
+            Write-ColorText "$($proc.ProcessName) (PID: $($proc.Id))" "White"
+        }
+    } else {
+        Write-ColorText "  Port $Port`:       NOT IN USE" "Red"
+    }
+    
+    # Database Status
+    Write-Section "Database Status"
+    $db = Get-DatabaseStatus
+    Write-ColorText "  Type:            " "Gray" -NoNewline
+    Write-ColorText $db.Type "White"
+    Write-ColorText "  Location:        " "Gray" -NoNewline
+    if ($db.Location) {
+        Write-ColorText $db.Location "White"
+    } else {
+        Write-ColorText "Not found" "Red"
+    }
+    Write-ColorText "  Size:            " "Gray" -NoNewline
+    if ($db.Size -gt 0) {
+        Write-ColorText "$([math]::Round($db.Size / 1KB, 2)) KB" "White"
+    } else {
+        Write-ColorText "N/A" "Gray"
+    }
+    Write-ColorText "  Live:            " "Gray" -NoNewline
+    if ($db.Live) {
+        Write-ColorText "YES - Connected" "Green"
+    } else {
+        Write-ColorText "NO" "Red"
+    }
+    
+    # Session Stats
+    if ($Script:StartTime) {
+        Write-Section "Session Statistics"
+        $uptime = ((Get-Date) - $Script:StartTime).ToString("hh\:mm\:ss")
+        Write-ColorText "  Uptime:          " "Gray" -NoNewline
+        Write-ColorText $uptime "White"
+        Write-ColorText "  Requests:        " "Gray" -NoNewline
+        Write-ColorText $Script:RequestCount "White"
+        Write-ColorText "  Errors:          " "Gray" -NoNewline
+        Write-ColorText $Script:ErrorCount $(if ($Script:ErrorCount -gt 0) { "Red" } else { "White" })
+    }
+}
+
+function Write-ColorText {
+    param([string]$Text, [string]$Color = 'White', [switch]$NoNewline)
+    if ($NoNewline) {
+        Write-Host $Text -ForegroundColor $Color -NoNewline
+    } else {
+        Write-Host $Text -ForegroundColor $Color
+    }
+}
+
+function Write-Section {
+    param([string]$Title)
+    Write-Host ""
+    Write-ColorText "--- $Title ---" "Cyan"
+}
+
+# ============================================
+# PROCESS MANAGEMENT
+# ============================================
+function Stop-AllProcesses {
+    Write-Header "Killing All App Processes"
+    
+    $killed = 0
+    
+    # Kill by port
+    $portProc = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    if ($portProc) {
+        try {
+            $proc = Get-Process -Id $portProc.OwningProcess -ErrorAction SilentlyContinue
+            if ($proc) {
+                Write-ColorText "  Killing PID $($proc.Id) ($($proc.ProcessName)) on port $Port..." "Yellow"
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                $killed++
+            }
+        } catch {}
+    }
+    
+    # Kill Node processes
+    Get-Process -Name "node" -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-ColorText "  Killing PID $($_.Id) (node)..." "Yellow"
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+        $killed++
+    }
+    
+    # Kill Bun processes
+    Get-Process -Name "bun" -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-ColorText "  Killing PID $($_.Id) (bun)..." "Yellow"
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+        $killed++
+    }
+    
+    # Kill Next processes
+    Get-Process -Name "next" -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-ColorText "  Killing PID $($_.Id) (next)..." "Yellow"
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+        $killed++
+    }
+    
+    Write-Host ""
+    Write-ColorText "  Total processes killed: $killed" $(if ($killed -gt 0) { "Green" } else { "Gray" })
+    
+    return $killed
 }
 
 # ============================================
@@ -292,13 +476,49 @@ function Start-DevServer {
     
     Write-Header "Starting Development Server"
     
+    # Get local IP
+    $Script:LocalIP = Get-LocalIPAddress
+    
+    # Show network info
+    Write-Section "Network Information"
+    Write-ColorText "  Local IP:     " "Gray" -NoNewline
+    Write-ColorText $Script:LocalIP "Green"
+    Write-ColorText "  App URL:      " "Gray" -NoNewline
+    Write-ColorText "http://$($Script:LocalIP):$Port" "Cyan"
+    Write-ColorText "  Local URL:    " "Gray" -NoNewline
+    Write-ColorText "http://localhost:$Port" "Cyan"
+    
+    # Show database info
+    Write-Section "Database Information"
+    $db = Get-DatabaseStatus
+    Write-ColorText "  Type:         " "Gray" -NoNewline
+    Write-ColorText $db.Type "White"
+    Write-ColorText "  Location:     " "Gray" -NoNewline
+    if ($db.Location) {
+        Write-ColorText $db.Location "White"
+    } else {
+        Write-ColorText "Not found - will be created" "Yellow"
+    }
+    Write-ColorText "  Status:       " "Gray" -NoNewline
+    if ($db.Exists) {
+        Write-ColorText "Found ($([math]::Round($db.Size / 1KB, 2)) KB)" "Green"
+    } else {
+        Write-ColorText "Will be created on first run" "Yellow"
+    }
+    
     # Initialize git tracking
     if (-not $NoAutoUpdate) {
         $Script:LastCommitHash = Get-GitLocalHash
-        Write-Log "Git tracking enabled (checking every $UpdateInterval seconds)" -Level "UPDATE"
-        Write-Log "Current commit: $($Script:LastCommitHash.Substring(0,7))" -Level "UPDATE"
-        Write-Host ""
+        Write-Section "Git Tracking"
+        if ($Script:LastCommitHash) {
+            Write-Log "Auto-update enabled (checking every $UpdateInterval seconds)" -Level "UPDATE"
+            Write-Log "Current commit: $($Script:LastCommitHash.Substring(0,7))" -Level "UPDATE"
+        } else {
+            Write-Log "Not in a git repository - auto-update disabled" -Level "WARN"
+        }
     }
+    
+    Write-Host ""
     
     Start-DevServerInternal
     
@@ -314,7 +534,6 @@ function Start-DevServerInternal {
     $portInUse = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
     if ($portInUse) {
         Write-Log "Port $Port is already in use, stopping existing process..." -Level "WARN"
-        
         try {
             $existingProcess = Get-Process -Id $portInUse.OwningProcess -ErrorAction SilentlyContinue
             if ($existingProcess) {
@@ -333,11 +552,7 @@ function Start-DevServerInternal {
     }
     
     # Determine command
-    $startCmd = if (Test-CommandExists "bun") {
-        "bun run dev"
-    } else {
-        "npm run dev"
-    }
+    $startCmd = if (Test-CommandExists "bun") { "bun run dev" } else { "npm run dev" }
     
     Write-Log "Starting: $startCmd" -Level "INFO"
     Write-Log "Port: $Port" -Level "INFO"
@@ -357,21 +572,25 @@ function Start-DevServerInternal {
     $Script:ServerProcess.StartInfo = $psi
     
     # Register cleanup on exit
-    [Console]::TreatControlCAsInput = $false
-    [Console]::CancelKeyPress.Add_Handler({
-        param($sender, $e)
-        $e.Cancel = $true
-        Stop-DevServer
-        exit 0
-    }.GetNewClosure())
+    try {
+        [Console]::TreatControlCAsInput = $false
+        [Console]::CancelKeyPress.Add_Handler({
+            param($sender, $e)
+            $e.Cancel = $true
+            Write-Host ""
+            Write-Log "Ctrl+C pressed - shutting down..." -Level "WARN"
+            Stop-DevServer
+            exit 0
+        }.GetNewClosure()) | Out-Null
+    } catch {}
     
-    # Also register for PowerShell engine shutdown
     Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
         Stop-DevServer
-    } -ErrorAction SilentlyContinue
+    } -ErrorAction SilentlyContinue | Out-Null
     
     try {
         $null = $Script:ServerProcess.Start()
+        $Script:StartTime = Get-Date
         Write-Log "Server started (PID: $($Script:ServerProcess.Id))" -Level "SUCCESS"
     } catch {
         Write-Log "Failed to start server: $_" -Level "ERROR"
@@ -383,9 +602,7 @@ function Start-DevServerInternal {
 
 function Stop-DevServer {
     if ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
-        Write-Host ""
         Write-Log "Stopping server..." -Level "WARN"
-        
         try {
             $Script:ServerProcess.Kill()
             $Script:ServerProcess.WaitForExit(5000)
@@ -396,23 +613,90 @@ function Stop-DevServer {
     }
 }
 
-function Start-ServerMonitor {
-    $startTime = Get-Date
-    $requestCount = 0
-    $errorCount = 0
-    $statusInterval = 30
-    $updateCheckCounter = 0
+function Show-ServerStatus {
+    $uptime = if ($Script:StartTime) { ((Get-Date) - $Script:StartTime).ToString("hh\:mm\:ss") } else { "00:00:00" }
     
-    $statusTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    $updateTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $portStatus = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    $connections = ($portStatus | Where-Object { $_.State -eq "Established" } | Measure-Object).Count
+    
+    $memoryStr = if ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
+        try {
+            $proc = Get-Process -Id $Script:ServerProcess.Id -ErrorAction SilentlyContinue
+            if ($proc) { "{0:N0} MB" -f ($proc.WorkingSet64 / 1MB) } else { "N/A" }
+        } catch { "N/A" }
+    } else { "N/A" }
+    
+    $gitBranch = Get-GitCurrentBranch
+    $gitHash = Get-GitLocalHash
+    $gitHashShort = if ($gitHash) { $gitHash.Substring(0,7) } else { "N/A" }
+    
+    $db = Get-DatabaseStatus
+    $dbStatus = if ($db.Live) { "LIVE" } else { "OFFLINE" }
+    $dbColor = if ($db.Live) { "Green" } else { "Red" }
     
     Write-Host ""
-    Write-Host "  ============================================================" -ForegroundColor DarkCyan
-    Write-Host "  SERVER RUNNING - Real-time logs below" -ForegroundColor Cyan
-    if (-not $NoAutoUpdate) {
-        Write-Host "  Auto-update: Checking every $UpdateInterval seconds" -ForegroundColor Magenta
-    }
-    Write-Host "  ============================================================" -ForegroundColor DarkCyan
+    Write-Host "  ╔════════════════════════════════════════════════════════════════╗" -ForegroundColor DarkGray
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "SERVER STATUS                                    " -NoNewline -ForegroundColor Cyan
+    Write-Host "║" -ForegroundColor DarkGray
+    Write-Host "  ╠════════════════════════════════════════════════════════════════╣" -ForegroundColor DarkGray
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Local:  " -NoNewline -ForegroundColor White
+    Write-Host "http://localhost:$Port".PadRight(20) -NoNewline -ForegroundColor Green
+    Write-Host "Uptime: " -NoNewline -ForegroundColor White
+    Write-Host "$uptime".PadRight(10) -NoNewline -ForegroundColor Yellow
+    Write-Host "║" -ForegroundColor DarkGray
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Network:" -NoNewline -ForegroundColor White
+    Write-Host " http://$($Script:LocalIP):$Port".PadRight(20) -NoNewline -ForegroundColor Green
+    Write-Host "Memory: " -NoNewline -ForegroundColor White
+    Write-Host "$memoryStr".PadRight(10) -NoNewline -ForegroundColor Yellow
+    Write-Host "║" -ForegroundColor DarkGray
+    Write-Host "  ╠════════════════════════════════════════════════════════════════╣" -ForegroundColor DarkGray
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Database: " -NoNewline -ForegroundColor White
+    Write-Host "$dbStatus".PadRight(10) -NoNewline -ForegroundColor $dbColor
+    Write-Host "  Connections: " -NoNewline -ForegroundColor White
+    Write-Host "$connections".PadRight(4) -NoNewline -ForegroundColor Cyan
+    Write-Host "                ║" -ForegroundColor DarkGray
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Requests: " -NoNewline -ForegroundColor White
+    Write-Host "$($Script:RequestCount)".PadRight(7) -NoNewline -ForegroundColor Cyan
+NoNewline
+    Write-Host "  Errors: " -NoNewline -ForegroundColor White
+    $errColor = if ($Script:ErrorCount -gt 0) { "Red" } else { "Green" }
+    Write-Host "$($Script:ErrorCount)".PadRight(5) -NoNewline -ForegroundColor $errColor
+    Write-Host "                      ║" -ForegroundColor DarkGray
+    Write-Host "  ╠════════════════════════════════════════════════════════════════╣" -ForegroundColor DarkGray
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Git: " -NoNewline -ForegroundColor White
+    Write-Host "$gitBranch" -NoNewline -ForegroundColor Magenta
+    Write-Host " @ " -NoNewline -ForegroundColor Gray
+    Write-Host "$gitHashShort" -NoNewline -ForegroundColor Magenta
+    Write-Host "                                         ║" -ForegroundColor DarkGray
+    Write-Host "  ╠════════════════════════════════════════════════════════════════╣" -ForegroundColor DarkGray
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Commands: [H]ealth [D]iagnostics [K]ill [Q]uit          " -NoNewline -ForegroundColor DarkCyan
+    Write-Host "║" -ForegroundColor DarkGray
+    Write-Host "  ╚════════════════════════════════════════════════════════════════╝" -ForegroundColor DarkGray
+    Write-Host ""
+}
+
+function Start-ServerMonitor {
+    $statusInterval = 30
+    $statusTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $updateTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $menuCheckInterval = 500  # ms
+    
+    Write-Host ""
+    Write-Host "  ╔════════════════════════════════════════════════════════════════╗" -ForegroundColor DarkCyan
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+    Write-Host "SERVER RUNNING - Real-time logs" -NoNewline -ForegroundColor Cyan
+    Write-Host "                             ║" -ForegroundColor DarkCyan
+    Write-Host "  ║ " -NoNewline -ForegroundColor DarkCyan
+    Write-Host "Commands: [H]ealth [D]iagnostics [K]ill [Q]uit" -NoNewline -ForegroundColor DarkGray
+    Write-Host "              ║" -ForegroundColor DarkCyan
+    Write-Host "  ╚════════════════════════════════════════════════════════════════╝" -ForegroundColor DarkCyan
     Write-Host ""
     
     while ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
@@ -420,26 +704,25 @@ function Start-ServerMonitor {
         if (-not $NoAutoUpdate -and -not $Script:Restarting) {
             if ($updateTimer.Elapsed.TotalSeconds -ge $UpdateInterval) {
                 $updateTimer.Restart()
-                
                 $updateInfo = Test-GitUpdates
-                
                 if ($updateInfo.HasUpdates) {
-                    Invoke-AutoUpdate -RestartServer $true -RequestCount ([ref]$requestCount) -ErrorCount ([ref]$errorCount)
+                    Invoke-AutoUpdate
                 }
             }
         }
         
-        # Read standard output
+        # Read standard output (non-blocking)
+        $outputRead = $false
         while (-not $Script:ServerProcess.StandardOutput.EndOfStream) {
             $line = $Script:ServerProcess.StandardOutput.ReadLine()
             if ($line) {
+                $outputRead = $true
                 $timestamp = Get-Date -Format "HH:mm:ss"
                 
-                # Color code different log types
                 if ($line -match "error|Error|ERROR|failed|Failed") {
                     Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
                     Write-Host $line -ForegroundColor Red
-                    $errorCount++
+                    $Script:ErrorCount++
                 } elseif ($line -match "warn|Warn|WARN") {
                     Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
                     Write-Host $line -ForegroundColor Yellow
@@ -449,7 +732,7 @@ function Start-ServerMonitor {
                 } elseif ($line -match "GET|POST|PUT|DELETE|PATCH") {
                     Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
                     Write-Host $line -ForegroundColor Cyan
-                    $requestCount++
+                    $Script:RequestCount++
                 } elseif ($line -match "localhost:$Port|http://") {
                     Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
                     Write-Host $line -ForegroundColor Green
@@ -465,107 +748,79 @@ function Start-ServerMonitor {
         while (-not $Script:ServerProcess.StandardError.EndOfStream) {
             $line = $Script:ServerProcess.StandardError.ReadLine()
             if ($line) {
+                $outputRead = $true
                 $timestamp = Get-Date -Format "HH:mm:ss"
                 Write-Host "  [$timestamp] " -NoNewline -ForegroundColor Gray
                 Write-Host $line -ForegroundColor Red
-                $errorCount++
+                $Script:ErrorCount++
                 Add-Content -Path $Script:ServerLogPath -Value "[$timestamp] [ERROR] $line" -ErrorAction SilentlyContinue
+            }
+        }
+        
+        # Check for keyboard input (non-blocking)
+        if ([Console]::KeyAvailable) {
+            $key = [Console]::ReadKey($true)
+            $keyChar = $key.KeyChar.ToString().ToUpper()
+            
+            switch ($keyChar) {
+                'H' { 
+                    Write-Host ""
+                    Test-AppHealth
+                    Write-Host ""
+                    Read-Host "Press Enter to continue"
+                }
+                'D' { 
+                    Write-Host ""
+                    Show-Diagnostics
+                    Write-Host ""
+                    Read-Host "Press Enter to continue"
+                }
+                'K' { 
+                    Write-Host ""
+                    Stop-AllProcesses
+                    Write-Host ""
+                    Read-Host "Press Enter to exit"
+                    exit 0
+                }
+                'Q' { 
+                    Write-Host ""
+                    Write-Log "Quit requested - shutting down..." -Level "WARN"
+                    Stop-DevServer
+                    Write-Host ""
+                    exit 0
+                }
             }
         }
         
         # Show periodic status
         if ($statusTimer.Elapsed.TotalSeconds -ge $statusInterval) {
             $statusTimer.Restart()
-            Show-ServerStatus -RequestCount $requestCount -ErrorCount $errorCount -StartTime $startTime
+            Show-ServerStatus
         }
         
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds $menuCheckInterval
     }
     
     # Process exited
     if ($Script:ServerProcess.HasExited -and -not $Script:Restarting) {
         Write-Host ""
-        Write-Host "  ============================================================" -ForegroundColor Red
-        Write-Host "  SERVER STOPPED" -ForegroundColor Red
-        Write-Host "  Exit Code: $($Script:ServerProcess.ExitCode)" -ForegroundColor Yellow
-        Write-Host "  ============================================================" -ForegroundColor Red
+        Write-Host "  ╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Red
+        Write-Host "  ║ " -NoNewline -ForegroundColor Red
+        Write-Host "SERVER STOPPED" -NoNewline -ForegroundColor Red
+        Write-Host "                                             ║" -ForegroundColor Red
+        Write-Host "  ║ " -NoNewline -ForegroundColor Red
+        Write-Host "Exit Code: $($Script:ServerProcess.ExitCode)" -NoNewline -ForegroundColor Yellow
+        Write-Host "                                        ║" -ForegroundColor Red
+        Write-Host "  ╚════════════════════════════════════════════════════════════════╝" -ForegroundColor Red
         
-        $uptime = ((Get-Date) - $startTime).ToString("hh\:mm\:ss")
+        $uptime = if ($Script:StartTime) { ((Get-Date) - $Script:StartTime).ToString("hh\:mm\:ss") } else { "00:00:00" }
         Write-Host ""
         Write-Host "  Session Statistics:" -ForegroundColor Cyan
         Write-Host "  - Uptime: $uptime" -ForegroundColor Gray
-        Write-Host "  - Total Requests: $requestCount" -ForegroundColor Gray
-        Write-Host "  - Errors: $errorCount" -ForegroundColor $(if ($errorCount -gt 0) { "Red" } else { "Gray" })
+        Write-Host "  - Total Requests: $($Script:RequestCount)" -ForegroundColor Gray
+        Write-Host "  - Errors: $($Script:ErrorCount)" -ForegroundColor $(if ($Script:ErrorCount -gt 0) { "Red" } else { "Gray" })
         Write-Host "  - Log file: $Script:ServerLogPath" -ForegroundColor Gray
     }
-}
-
-function Show-ServerStatus {
-    param(
-        [int]$RequestCount,
-        [int]$ErrorCount,
-        [datetime]$StartTime
-    )
-    
-    $uptime = ((Get-Date) - $StartTime).ToString("hh\:mm\:ss")
-    
-    $portStatus = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
-    $connections = ($portStatus | Measure-Object).Count
-    
-    $memoryStr = if ($Script:ServerProcess -and -not $Script:ServerProcess.HasExited) {
-        try {
-            $proc = Get-Process -Id $Script:ServerProcess.Id -ErrorAction SilentlyContinue
-            if ($proc) {
-                "{0:N0} MB" -f ($proc.WorkingSet64 / 1MB)
-            } else { "N/A" }
-        } catch { "N/A" }
-    } else { "N/A" }
-    
-    # Get current git info
-    $gitBranch = Get-GitCurrentBranch
-    $gitHash = (Get-GitLocalHash)
-    $gitHashShort = if ($gitHash) { $gitHash.Substring(0,7) } else { "N/A" }
-    
-    Write-Host ""
-    Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkGray
-    Write-Host "  | " -NoNewline -ForegroundColor DarkGray
-    Write-Host "SERVER STATUS" -NoNewline -ForegroundColor Cyan
-    Write-Host "                                              |" -ForegroundColor DarkGray
-    Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkGray
-    Write-Host "  | " -NoNewline -ForegroundColor DarkGray
-    Write-Host "URL: " -NoNewline -ForegroundColor White
-    Write-Host "http://localhost:$Port" -NoNewline -ForegroundColor Green
-    if ($Port -eq 3000) {
-        Write-Host "                          |" -ForegroundColor DarkGray
-    } else {
-        Write-Host "                        |" -ForegroundColor DarkGray
-    }
-    Write-Host "  | " -NoNewline -ForegroundColor DarkGray
-    Write-Host "Uptime: " -NoNewline -ForegroundColor White
-    Write-Host "$uptime".PadRight(8) -NoNewline -ForegroundColor Cyan
-    Write-Host "  Memory: " -NoNewline -ForegroundColor White
-    Write-Host "$memoryStr".PadLeft(10) -NoNewline -ForegroundColor Yellow
-    Write-Host "       |" -ForegroundColor DarkGray
-    Write-Host "  | " -NoNewline -ForegroundColor DarkGray
-    Write-Host "Active Connections: " -NoNewline -ForegroundColor White
-    Write-Host "$connections".PadLeft(2) -NoNewline -ForegroundColor Green
-    Write-Host "   Total Requests: " -NoNewline -ForegroundColor White
-    Write-Host "$requestCount".PadLeft(5) -NoNewline -ForegroundColor Cyan
-    Write-Host "   |" -ForegroundColor DarkGray
-    Write-Host "  | " -NoNewline -ForegroundColor DarkGray
-    Write-Host "Errors: " -NoNewline -ForegroundColor White
-    $errorColor = if ($ErrorCount -gt 0) { "Red" } else { "Green" }
-    Write-Host "$ErrorCount".PadLeft(3) -NoNewline -ForegroundColor $errorColor
-    Write-Host "                                                  |" -ForegroundColor DarkGray
-    Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkGray
-    Write-Host "  | " -NoNewline -ForegroundColor DarkGray
-    Write-Host "Git: " -NoNewline -ForegroundColor White
-    Write-Host "$gitBranch" -NoNewline -ForegroundColor Magenta
-    Write-Host " @ " -NoNewline -ForegroundColor Gray
-    Write-Host "$gitHashShort" -NoNewline -ForegroundColor Magenta
-    Write-Host "                               |" -ForegroundColor DarkGray
-    Write-Host "  +------------------------------------------------------------+" -ForegroundColor DarkGray
-    Write-Host ""
 }
 
 # ============================================

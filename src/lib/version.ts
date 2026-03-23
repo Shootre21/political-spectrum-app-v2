@@ -1,9 +1,9 @@
 // App Version Configuration
 export const APP_VERSION = {
-  version: '2.6.0',
-  versionName: 'Enhanced Spectrum & UI',
-  releaseDate: '2025-01-18',
-  buildNumber: 260,
+  version: '3.0.0',
+  versionName: 'Interactive Management & Network Tools',
+  releaseDate: '2026-03-23',
+  buildNumber: 300,
 };
 
 export type UpdateStatus = 'up-to-date' | 'update-available' | 'unknown';
@@ -25,6 +25,20 @@ export function getVersionInfo(): VersionInfo {
     versionName: APP_VERSION.versionName,
     releaseDate: APP_VERSION.releaseDate,
     changelog: [
+      {
+        version: '3.0.0',
+        date: '2026-03-23',
+        changes: [
+          'NEW: Interactive management console with real-time commands',
+          'NEW: manage.ps1 - Standalone process manager & diagnostics tool',
+          'NEW: kill.ps1 - Quick process termination script',
+          'NEW: Network info display (Local IP, App URL, Database status)',
+          'NEW: Interactive commands while logs streaming: [H]ealth [D]iagnostics [K]ill [Q]uit',
+          'NEW: Database status monitoring (SQLite file location, size, live status)',
+          'IMPROVED: Enhanced status dashboard with network and database info',
+          'FIX: Database connection issues (added .env file, Prisma client generation)',
+        ],
+      },
       {
         version: '2.6.0',
         date: '2025-01-18',
