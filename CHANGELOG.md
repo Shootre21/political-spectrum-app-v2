@@ -5,6 +5,32 @@ All notable changes to the Political News Spectrum app will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2026-03-24
+
+### Documentation Updates
+
+#### README Screenshots
+- Added screenshot placeholders for Homepage, Share Page, Misc Page, and Footer
+- Screenshots section now includes visual previews of all major pages
+- Playwright test setup ready for automated screenshot capture
+
+#### Playwright Screenshot Tests
+- Created `tests/screenshots.spec.ts` for automated screenshot capture
+- Created `capture-screenshots.cjs` script for manual screenshot generation
+- Supports desktop, mobile, and dark mode views
+- Full-page and viewport screenshots for all pages
+
+### Technical Details
+
+| Component | Change |
+|-----------|--------|
+| README.md | Added Screenshots section with image references |
+| tests/screenshots.spec.ts | NEW - Playwright screenshot tests |
+| capture-screenshots.cjs | NEW - Node.js screenshot script |
+| docs/screenshots/ | NEW - Directory for screenshot storage |
+
+---
+
 ## [3.5.0] - 2026-03-24
 
 ### New Features
@@ -395,6 +421,7 @@ If you weren't using AI:
 
 | Version | Name | Key Feature |
 |---------|------|-------------|
+| 3.5.1 | Documentation Update | README screenshots & Playwright tests |
 | 3.5.0 | Share & Misc Pages | Social sharing and resources pages |
 | 3.4.2 | Blindspot Alert | Coverage disparity detection & alerts |
 | 3.4.1 | Validation & Data Integrity | All numbers validated and clamped |
@@ -410,6 +437,7 @@ If you weren't using AI:
 
 ---
 
+[3.5.1]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.2...v3.5.0
 [3.4.2]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.1...v3.4.2
 [3.4.1]: https://github.com/Shootre21/political-spectrum-app-v2/compare/v3.4.0...v3.4.1

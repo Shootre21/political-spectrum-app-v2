@@ -1,10 +1,21 @@
 {
-  "version": "3.5.0",
-  "versionName": "Share & Misc Pages",
+  "version": "3.5.1",
+  "versionName": "Documentation Update",
   "releaseDate": "2026-03-24",
-  "buildNumber": 350,
+  "buildNumber": 351,
   "github": "https://github.com/Shootre21/political-spectrum-app-v2",
   "changelog": [
+    {
+      "version": "3.5.1",
+      "date": "2026-03-24",
+      "changes": [
+        "DOCS: Added screenshot placeholders for Homepage, Share Page, Misc Page, and Footer in README",
+        "DOCS: Created Playwright screenshot tests (tests/screenshots.spec.ts)",
+        "DOCS: Created capture-screenshots.cjs script for manual screenshot generation",
+        "DOCS: Added docs/screenshots/ directory for screenshot storage",
+        "DOCS: Supports desktop, mobile, and dark mode screenshot views"
+      ]
+    },
     {
       "version": "3.5.0",
       "date": "2026-03-24",
