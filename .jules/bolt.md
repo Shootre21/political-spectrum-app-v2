@@ -1,0 +1,3 @@
+## 2025-03-03 - N+1 Query Bottleneck Avoidance with Dynamic `OR` Operators in Prisma
+**Learning:** The codebase has historically used `Promise.all` with `db.article.findMany` inside loops (e.g., `src/lib/analytics.ts`), creating N+1 query bottlenecks. These can be optimized into single queries utilizing Prisma's `OR` or `in` operators. When using these dynamic array mapping approaches for queries, you must ensure the input array is not empty (e.g., `if (!sources || sources.length === 0)`) to prevent unnecessary full-table database scans or Prisma schema query validation errors.
+**Action:** Always include a guard clause for empty arrays before running any single Prisma query composed of dynamic `in` or `OR` statements mapped from those arrays.
