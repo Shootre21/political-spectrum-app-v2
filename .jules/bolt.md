@@ -1,0 +1,3 @@
+## 2025-03-30 - Prisma N+1 Optimizations Using Promise.all Loops
+**Learning:** In `src/lib/analytics.ts`, `Promise.all` combined with `db.article.findMany` operations was causing severe N+1 database bottlenecks during `compareSources`. The same issue likely exists elsewhere. Using mapped arrays inside Prisma's `OR` and `in` operators resolves this, but doing so without a preceding guard clause (e.g. `if (!sources || sources.length === 0) return []`) can crash Prisma or accidentally scan the entire table.
+**Action:** Always wrap array-mapped `OR`/`in` queries with a `length === 0` guard clause to ensure empty array inputs exit early without triggering full table scans.
