@@ -1,0 +1,3 @@
+## 2025-02-18 - Pre-compiled RegExps in text analysis engine
+**Learning:** `src/lib/lexicons.ts` creates hundreds of `RegExp` objects inside hot loops using `new RegExp(term, 'gi')` for every article parsed. While caching instances helps, JS `String.prototype.match()` inherently resets the internal `lastIndex` on global RegExps, making it entirely thread-safe and re-usable across runs without maintaining stale state, which wasn't clear at first and initially caused fear of state carryover.
+**Action:** When building text-parsing logic that heavily relies on Regex, ALWAYS pre-compile at module load time (not on request/execution). If matching counts are needed, use `.match()` with global flags on a singleton RegExp rather than `.exec()` or `.test()`.
