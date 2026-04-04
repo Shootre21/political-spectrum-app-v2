@@ -347,6 +347,22 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Pre-compiled RegExp lexicons for performance optimization (avoiding RegExp instantiation in hot loops)
+// We use the 'gi' flag so String.prototype.match() can count occurrences without managing lastIndex state.
+const COMPILED_TOPIC_LEXICONS = Object.fromEntries(
+  Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => [
+    topic,
+    {
+      leftRegexes: lexicon.leftTerms.map(term => new RegExp(term, 'gi')),
+      rightRegexes: lexicon.rightTerms.map(term => new RegExp(term, 'gi')),
+    }
+  ])
+);
+
+const COMPILED_EMOTIONAL_LEXICON = {
+  highEmotionRegexes: EMOTIONAL_LEXICON.highEmotion.map(word => new RegExp(word, 'gi'))
+};
+
 /**
  * Detect topic from text
  */
@@ -369,26 +385,22 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
-  
-  const lowerText = text.toLowerCase();
+  const compiledLexicon = COMPILED_TOPIC_LEXICONS[topic];
+  if (!compiledLexicon) return 0;
   
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  for (const regex of compiledLexicon.leftRegexes) {
+    const matches = text.match(regex);
     if (matches) {
       score -= matches.length * 0.5;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  for (const regex of compiledLexicon.rightRegexes) {
+    const matches = text.match(regex);
     if (matches) {
       score += matches.length * 0.5;
     }
@@ -401,13 +413,11 @@ export function calculateFramingScore(text: string, topic: string): number {
  * Calculate emotional intensity score
  */
 export function calculateEmotionalScore(text: string): number {
-  const lowerText = text.toLowerCase();
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
+  for (const regex of COMPILED_EMOTIONAL_LEXICON.highEmotionRegexes) {
+    const matches = text.match(regex);
     if (matches) {
       score += matches.length * 2;
     }
