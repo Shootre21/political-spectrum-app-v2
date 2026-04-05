@@ -86,63 +86,67 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   }
 
   try {
-    // Get all analyzed articles
-    const articles = await db.article.findMany({
-      where: {
-        leftWingSummary: { not: null },
-      },
-      select: {
-        id: true,
-        source: true,
-        spectrumScore: true,
-        category: true,
-        createdAt: true,
-      },
-    });
-
     const totalArticles = await db.article.count();
-    const analyzedArticles = articles.length;
 
-    // Calculate average bias
-    const avgBiasScore = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (analyzedArticles || 1);
+    // ⚡ Bolt Optimization: Using Prisma database aggregation methods
+    // instead of finding all records into memory to avoid O(N) memory bottlenecks
 
-    // Source distribution
-    const sourceCounts = new Map<string, { count: number; bias: number }>();
-    articles.forEach(a => {
-      const existing = sourceCounts.get(a.source) || { count: 0, bias: 0 };
-      sourceCounts.set(a.source, {
-        count: existing.count + 1,
-        bias: existing.bias + (a.spectrumScore || 0),
-      });
+    // 1. Analyzed articles count & avg bias
+    const overviewStats = await db.article.aggregate({
+      where: { leftWingSummary: { not: null } },
+      _count: { _all: true },
+      _sum: { spectrumScore: true },
+    });
+    const analyzedArticles = overviewStats._count._all;
+    const avgBiasScore = (overviewStats._sum.spectrumScore || 0) / (analyzedArticles || 1);
+
+    // 2. Source distribution
+    const sourceGroups = await db.article.groupBy({
+      by: ['source'],
+      where: { leftWingSummary: { not: null } },
+      _count: { _all: true },
+      _sum: { spectrumScore: true },
     });
 
-    const topSources = Array.from(sourceCounts.entries())
-      .map(([source, data]) => ({
-        source,
-        count: data.count,
-        avgBias: data.bias / data.count,
+    const topSources = sourceGroups
+      .map(g => ({
+        source: g.source,
+        count: g._count._all,
+        avgBias: (g._sum.spectrumScore || 0) / g._count._all,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    // Bias distribution
-    const biasDistribution = {
-      left: articles.filter(a => (a.spectrumScore || 0) < -1).length,
-      center: articles.filter(a => Math.abs(a.spectrumScore || 0) <= 1).length,
-      right: articles.filter(a => (a.spectrumScore || 0) > 1).length,
-    };
-
-    // Topic distribution
-    const topicCounts = new Map<string, number>();
-    articles.forEach(a => {
-      if (a.category) {
-        topicCounts.set(a.category, (topicCounts.get(a.category) || 0) + 1);
-      }
+    // 3. Topic distribution
+    const topicGroups = await db.article.groupBy({
+      by: ['category'],
+      where: {
+        leftWingSummary: { not: null },
+        category: { not: null }
+      },
+      _count: { _all: true },
     });
 
-    const topicDistribution = Array.from(topicCounts.entries())
-      .map(([topic, count]) => ({ topic, count }))
+    const topicDistribution = topicGroups
+      .map(g => ({
+        topic: g.category as string,
+        count: g._count._all,
+      }))
       .sort((a, b) => b.count - a.count);
+
+    // 4. Bias distribution
+    const [leftCount, rightCount, centerCount, nullCount] = await Promise.all([
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: { lt: -1 } } }),
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: { gt: 1 } } }),
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: { gte: -1, lte: 1 } } }),
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: null } }),
+    ]);
+
+    const biasDistribution = {
+      left: leftCount,
+      center: centerCount + nullCount,
+      right: rightCount,
+    };
 
     // Recent trends (last 7 days)
     const recentTrends = await getRecentTrends();
