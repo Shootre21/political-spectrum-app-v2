@@ -1,0 +1,3 @@
+## 2024-06-11 - Database OR Map Memory Pattern
+**Learning:** Batched Prisma OR queries with Array.map inside loops correctly replace N+1 queries, but standard string matching in the DB using `contains` must be correctly replicated using an in-memory `.filter()` that performs `toLowerCase().includes()` to maintain case-insensitive matching correctly.
+**Action:** When replacing N+1 queries with single batch queries containing dynamic `OR` arrays, always manually replicate any specific query string matching conditions (like case-insensitivity or partial string matches) during the subsequent in-memory filtering.
