@@ -1,0 +1,3 @@
+## 2024-05-24 - [Optimize compareSources Analytics N+1]
+**Learning:** Found an N+1 query problem in `src/lib/analytics.ts` where looping over array of items mapped to a `db.article.findMany` effectively created a loop executing Prisma queries.
+**Action:** Replaced it with a single batched Prisma `IN` (or `OR`) query using the same criteria and processed filtering the correct results for each iteration in-memory using `.filter()`. Replicated Prisma's 'insensitive' matching locally using `.toLowerCase()`. This prevents N+1 calls across network/DB boundaries.
