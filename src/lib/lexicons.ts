@@ -244,6 +244,25 @@ export const TOPIC_LEXICONS = {
   },
 };
 
+// Pre-compiled regexes for TOPIC_LEXICONS to avoid recreation on every call
+const PRECOMPILED_TOPIC_REGEXES = Object.entries(TOPIC_LEXICONS).reduce((acc, [topic, lexicon]) => {
+  acc[topic as keyof typeof TOPIC_LEXICONS] = {
+    leftRegexes: lexicon.leftTerms.map(term => new RegExp(term.toLowerCase(), 'gi')),
+    rightRegexes: lexicon.rightTerms.map(term => new RegExp(term.toLowerCase(), 'gi'))
+  };
+  return acc;
+}, {} as Record<keyof typeof TOPIC_LEXICONS, { leftRegexes: RegExp[], rightRegexes: RegExp[] }>);
+
+// Lowercased arrays for exact string matching to avoid lowercasing during hot loops
+const PRELOWERCASED_TOPIC_TERMS = Object.entries(TOPIC_LEXICONS).reduce((acc, [topic, lexicon]) => {
+  acc[topic as keyof typeof TOPIC_LEXICONS] = [
+    ...lexicon.leftTerms.map(t => t.toLowerCase()),
+    ...lexicon.rightTerms.map(t => t.toLowerCase())
+  ];
+  return acc;
+}, {} as Record<keyof typeof TOPIC_LEXICONS, string[]>);
+
+
 // Emotional/sensational language markers
 export const EMOTIONAL_LEXICON = {
   highEmotion: [
@@ -347,6 +366,18 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Pre-compiled global regexes and lowercased lists for EMOTIONAL_LEXICON
+const PRECOMPILED_EMOTION_REGEXES = EMOTIONAL_LEXICON.highEmotion.map(word => new RegExp(word, 'gi'));
+const PRELOWERCASED_PARTISAN = EMOTIONAL_LEXICON.partisanMarkers.map(m => m.toLowerCase());
+const PRELOWERCASED_AUTHORITARIAN = EMOTIONAL_LEXICON.authoritarianMarkers.map(m => m.toLowerCase());
+const PRELOWERCASED_SOCIALIST = EMOTIONAL_LEXICON.socialistMarkers.map(m => m.toLowerCase());
+
+// Pre-lowercased indicators for SOURCES
+const PRELOWERCASED_SOURCES = Object.entries(SOURCE_TYPE_INDICATORS).reduce((acc, [type, indicators]) => {
+  acc[type] = indicators.map(i => i.toLowerCase());
+  return acc;
+}, {} as Record<string, string[]>);
+
 /**
  * Detect topic from text
  */
@@ -354,11 +385,13 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (const [topic, terms] of Object.entries(PRELOWERCASED_TOPIC_TERMS)) {
+    // Optimization: Early exit loop instead of filtering all terms
+    for (let i = 0; i < terms.length; i++) {
+      if (lowerText.includes(terms[i])) {
+        topics.push(topic);
+        break; // Match found, no need to check other terms for this topic
+      }
     }
   }
   
@@ -369,26 +402,23 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const precompiled = PRECOMPILED_TOPIC_REGEXES[topic as keyof typeof TOPIC_LEXICONS];
+  if (!precompiled) return 0;
   
   const lowerText = text.toLowerCase();
-  
   let score = 0;
   
-  // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  // Count left-framing terms using pre-compiled regexes
+  for (let i = 0; i < precompiled.leftRegexes.length; i++) {
+    const matches = lowerText.match(precompiled.leftRegexes[i]);
     if (matches) {
       score -= matches.length * 0.5;
     }
   }
   
-  // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  // Count right-framing terms using pre-compiled regexes
+  for (let i = 0; i < precompiled.rightRegexes.length; i++) {
+    const matches = lowerText.match(precompiled.rightRegexes[i]);
     if (matches) {
       score += matches.length * 0.5;
     }
@@ -404,10 +434,9 @@ export function calculateEmotionalScore(text: string): number {
   const lowerText = text.toLowerCase();
   let score = 0;
   
-  // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
+  // Count high-emotion words using precompiled regexes
+  for (let i = 0; i < PRECOMPILED_EMOTION_REGEXES.length; i++) {
+    const matches = lowerText.match(PRECOMPILED_EMOTION_REGEXES[i]);
     if (matches) {
       score += matches.length * 2;
     }
@@ -423,9 +452,10 @@ export function detectPartisanMarkers(text: string): { markers: string[]; score:
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.partisanMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRELOWERCASED_PARTISAN.length; i++) {
+    if (lowerText.includes(PRELOWERCASED_PARTISAN[i])) {
+      // Optimization: use original casing if needed, but array elements align 1:1
+      markers.push(EMOTIONAL_LEXICON.partisanMarkers[i]);
     }
   }
   
@@ -442,9 +472,9 @@ export function detectAuthoritarianMarkers(text: string): { markers: string[]; s
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.authoritarianMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRELOWERCASED_AUTHORITARIAN.length; i++) {
+    if (lowerText.includes(PRELOWERCASED_AUTHORITARIAN[i])) {
+      markers.push(EMOTIONAL_LEXICON.authoritarianMarkers[i]);
     }
   }
   
@@ -461,9 +491,9 @@ export function detectSocialistMarkers(text: string): { markers: string[]; score
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.socialistMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRELOWERCASED_SOCIALIST.length; i++) {
+    if (lowerText.includes(PRELOWERCASED_SOCIALIST[i])) {
+      markers.push(EMOTIONAL_LEXICON.socialistMarkers[i]);
     }
   }
   
@@ -481,13 +511,15 @@ export function extractSources(text: string): { types: string[]; count: number; 
   const types: string[] = [];
   const details: string[] = [];
   
-  for (const [type, indicators] of Object.entries(SOURCE_TYPE_INDICATORS)) {
-    for (const indicator of indicators) {
-      if (lowerText.includes(indicator)) {
-        if (!types.includes(type)) {
+  for (const [type, indicators] of Object.entries(PRELOWERCASED_SOURCES)) {
+    let typeAdded = false;
+    for (let i = 0; i < indicators.length; i++) {
+      if (lowerText.includes(indicators[i])) {
+        if (!typeAdded && !types.includes(type)) {
           types.push(type);
+          typeAdded = true; // Optimization to avoid multiple includes checks for the same type
         }
-        details.push(indicator);
+        details.push(SOURCE_TYPE_INDICATORS[type as keyof typeof SOURCE_TYPE_INDICATORS][i]);
       }
     }
   }
