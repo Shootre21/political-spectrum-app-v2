@@ -86,66 +86,103 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   }
 
   try {
-    // Get all analyzed articles
-    const articles = await db.article.findMany({
-      where: {
-        leftWingSummary: { not: null },
-      },
-      select: {
-        id: true,
-        source: true,
-        spectrumScore: true,
-        category: true,
-        createdAt: true,
-      },
-    });
+    // Get basic counts efficiently using Prisma aggregations
+    const [totalArticles, analyzedCount] = await Promise.all([
+      db.article.count(),
+      db.article.count({ where: { leftWingSummary: { not: null } } })
+    ]);
 
-    const totalArticles = await db.article.count();
-    const analyzedArticles = articles.length;
+    const analyzedArticles = analyzedCount;
 
-    // Calculate average bias
-    const avgBiasScore = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (analyzedArticles || 1);
+    // Parallelize the grouped queries and range counts
+    const [
+      sourceGroups,
+      topicGroups,
+      leftCount,
+      centerCountWithScores,
+      centerCountNullScores,
+      rightCount,
+      recentTrends,
+      sumAgg
+    ] = await Promise.all([
+      // Top sources by count
+      db.article.groupBy({
+        by: ['source'],
+        where: { leftWingSummary: { not: null } },
+        _count: { source: true },
+        _sum: { spectrumScore: true },
+        orderBy: { _count: { source: 'desc' } },
+        take: 10,
+      }),
+      // Top topics by count
+      db.article.groupBy({
+        by: ['category'],
+        where: {
+          leftWingSummary: { not: null },
+          category: { not: null }
+        },
+        _count: { category: true },
+        orderBy: { _count: { category: 'desc' } },
+      }),
+      // Bias distribution: left (score < -1)
+      db.article.count({
+        where: {
+          leftWingSummary: { not: null },
+          spectrumScore: { lt: -1 }
+        }
+      }),
+      // Bias distribution: center (-1 <= score <= 1)
+      db.article.count({
+        where: {
+          leftWingSummary: { not: null },
+          spectrumScore: { gte: -1, lte: 1 }
+        }
+      }),
+      // Bias distribution: center (score is null)
+      db.article.count({
+        where: {
+          leftWingSummary: { not: null },
+          spectrumScore: null
+        }
+      }),
+      // Bias distribution: right (score > 1)
+      db.article.count({
+        where: {
+          leftWingSummary: { not: null },
+          spectrumScore: { gt: 1 }
+        }
+      }),
+      // Recent trends (last 7 days)
+      getRecentTrends(),
+      // Sum of all scores to calculate avg safely with nulls treated as 0
+      db.article.aggregate({
+        where: { leftWingSummary: { not: null } },
+        _sum: { spectrumScore: true }
+      })
+    ]);
 
-    // Source distribution
-    const sourceCounts = new Map<string, { count: number; bias: number }>();
-    articles.forEach(a => {
-      const existing = sourceCounts.get(a.source) || { count: 0, bias: 0 };
-      sourceCounts.set(a.source, {
-        count: existing.count + 1,
-        bias: existing.bias + (a.spectrumScore || 0),
-      });
-    });
+    // Handle nulls by treating them as 0 for sum and avg
+    const avgBiasScore = (sumAgg._sum.spectrumScore || 0) / (analyzedCount || 1);
 
-    const topSources = Array.from(sourceCounts.entries())
-      .map(([source, data]) => ({
-        source,
-        count: data.count,
-        avgBias: data.bias / data.count,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+    // Total center count includes scores between -1 and 1 PLUS null scores (which act as 0)
+    const centerCount = centerCountWithScores + centerCountNullScores;
 
-    // Bias distribution
+    const topSources = sourceGroups.map(g => ({
+      source: g.source,
+      count: g._count.source,
+      avgBias: (g._sum.spectrumScore || 0) / (g._count.source || 1),
+    }));
+
     const biasDistribution = {
-      left: articles.filter(a => (a.spectrumScore || 0) < -1).length,
-      center: articles.filter(a => Math.abs(a.spectrumScore || 0) <= 1).length,
-      right: articles.filter(a => (a.spectrumScore || 0) > 1).length,
+      left: leftCount,
+      center: centerCount,
+      right: rightCount,
     };
 
-    // Topic distribution
-    const topicCounts = new Map<string, number>();
-    articles.forEach(a => {
-      if (a.category) {
-        topicCounts.set(a.category, (topicCounts.get(a.category) || 0) + 1);
-      }
-    });
-
-    const topicDistribution = Array.from(topicCounts.entries())
-      .map(([topic, count]) => ({ topic, count }))
-      .sort((a, b) => b.count - a.count);
-
-    // Recent trends (last 7 days)
-    const recentTrends = await getRecentTrends();
+    const topicDistribution = topicGroups.map(g => ({
+      topic: g.category as string,
+      count: g._count.category,
+    }));
 
     return {
       totalArticles,
