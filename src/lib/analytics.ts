@@ -283,28 +283,40 @@ export async function compareSources(sources: string[]): Promise<{
   commonTopics: string[];
   coverageGap: { topic: string; missing: string[] }[];
 }> {
-  const sourceData = await Promise.all(
-    sources.map(async (source) => {
-      const articles = await db.article.findMany({
-        where: {
-          source: { contains: source, mode: 'insensitive' },
-          leftWingSummary: { not: null },
-        },
-        select: { spectrumScore: true, category: true },
-      });
+  if (!sources || sources.length === 0) {
+    return { sources: [], commonTopics: [], coverageGap: [] };
+  }
 
-      const outlet = getOutletInfo(source);
-      const avgBias = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (articles.length || 1);
+  // Optimize: Replace N+1 queries with a single batched OR query to fetch articles for all requested sources at once.
+  // This reduces database round trips and significantly improves performance for multiple sources.
+  const allArticles = await db.article.findMany({
+    where: {
+      OR: sources.map(source => ({
+        source: { contains: source, mode: 'insensitive' }
+      })),
+      leftWingSummary: { not: null },
+    },
+    select: { source: true, spectrumScore: true, category: true },
+  });
 
-      return {
-        name: outlet?.name || source,
-        avgBias,
-        count: articles.length,
-        reliability: outlet?.reliabilityScore || 50,
-        topics: articles.map(a => a.category).filter(Boolean) as string[],
-      };
-    })
-  );
+  const sourceData = sources.map((source) => {
+    // Perform case-insensitive matching in-memory since Prisma fetched the batch
+    const articles = allArticles.filter(a =>
+      a.source?.toLowerCase().includes(source.toLowerCase())
+    );
+
+    const outlet = getOutletInfo(source);
+    // Use length > 0 check or default to 1 to match original logic, though original used length || 1
+    const avgBias = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (articles.length || 1);
+
+    return {
+      name: outlet?.name || source,
+      avgBias,
+      count: articles.length,
+      reliability: outlet?.reliabilityScore || 50,
+      topics: articles.map(a => a.category).filter(Boolean) as string[],
+    };
+  });
 
   // Find common topics
   const allTopics = new Set<string>();
