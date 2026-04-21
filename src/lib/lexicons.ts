@@ -347,6 +347,37 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// --- Pre-computed optimization caches ---
+const PRECOMPUTED_TOPICS = Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => ({
+  topic,
+  terms: [...lexicon.leftTerms, ...lexicon.rightTerms].map(t => t.toLowerCase()),
+}));
+
+const PRECOMPUTED_FRAMING = Object.fromEntries(
+  Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => [
+    topic,
+    {
+      leftRegexes: lexicon.leftTerms.map(term => new RegExp(term.toLowerCase(), 'gi')),
+      rightRegexes: lexicon.rightTerms.map(term => new RegExp(term.toLowerCase(), 'gi')),
+    }
+  ])
+);
+
+const PRECOMPUTED_EMOTIONAL_REGEXES = EMOTIONAL_LEXICON.highEmotion.map(
+  word => new RegExp(word, 'gi')
+);
+
+const PRECOMPUTED_PARTISAN_MARKERS = EMOTIONAL_LEXICON.partisanMarkers.map(m => m.toLowerCase());
+const PRECOMPUTED_AUTHORITARIAN_MARKERS = EMOTIONAL_LEXICON.authoritarianMarkers.map(m => m.toLowerCase());
+const PRECOMPUTED_SOCIALIST_MARKERS = EMOTIONAL_LEXICON.socialistMarkers.map(m => m.toLowerCase());
+
+const PRECOMPUTED_SOURCES = Object.entries(SOURCE_TYPE_INDICATORS).map(([type, indicators]) => ({
+  type,
+  indicatorsLowerCase: indicators.map(i => i.toLowerCase()),
+  originalIndicators: indicators
+}));
+// ----------------------------------------
+
 /**
  * Detect topic from text
  */
@@ -354,11 +385,13 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (let t = 0; t < PRECOMPUTED_TOPICS.length; t++) {
+    const { topic, terms } = PRECOMPUTED_TOPICS[t];
+    for (let i = 0; i < terms.length; i++) {
+      if (lowerText.includes(terms[i])) {
+        topics.push(topic);
+        break;
+      }
     }
   }
   
@@ -369,26 +402,23 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const precomputed = PRECOMPUTED_FRAMING[topic];
+  if (!precomputed) return 0;
   
   const lowerText = text.toLowerCase();
-  
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  for (let i = 0; i < precomputed.leftRegexes.length; i++) {
+    const matches = lowerText.match(precomputed.leftRegexes[i]);
     if (matches) {
       score -= matches.length * 0.5;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  for (let i = 0; i < precomputed.rightRegexes.length; i++) {
+    const matches = lowerText.match(precomputed.rightRegexes[i]);
     if (matches) {
       score += matches.length * 0.5;
     }
@@ -405,9 +435,8 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
+  for (let i = 0; i < PRECOMPUTED_EMOTIONAL_REGEXES.length; i++) {
+    const matches = lowerText.match(PRECOMPUTED_EMOTIONAL_REGEXES[i]);
     if (matches) {
       score += matches.length * 2;
     }
@@ -423,9 +452,9 @@ export function detectPartisanMarkers(text: string): { markers: string[]; score:
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.partisanMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRECOMPUTED_PARTISAN_MARKERS.length; i++) {
+    if (lowerText.includes(PRECOMPUTED_PARTISAN_MARKERS[i])) {
+      markers.push(EMOTIONAL_LEXICON.partisanMarkers[i]);
     }
   }
   
@@ -442,9 +471,9 @@ export function detectAuthoritarianMarkers(text: string): { markers: string[]; s
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.authoritarianMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRECOMPUTED_AUTHORITARIAN_MARKERS.length; i++) {
+    if (lowerText.includes(PRECOMPUTED_AUTHORITARIAN_MARKERS[i])) {
+      markers.push(EMOTIONAL_LEXICON.authoritarianMarkers[i]);
     }
   }
   
@@ -461,9 +490,9 @@ export function detectSocialistMarkers(text: string): { markers: string[]; score
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.socialistMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRECOMPUTED_SOCIALIST_MARKERS.length; i++) {
+    if (lowerText.includes(PRECOMPUTED_SOCIALIST_MARKERS[i])) {
+      markers.push(EMOTIONAL_LEXICON.socialistMarkers[i]);
     }
   }
   
@@ -481,13 +510,14 @@ export function extractSources(text: string): { types: string[]; count: number; 
   const types: string[] = [];
   const details: string[] = [];
   
-  for (const [type, indicators] of Object.entries(SOURCE_TYPE_INDICATORS)) {
-    for (const indicator of indicators) {
-      if (lowerText.includes(indicator)) {
+  for (let i = 0; i < PRECOMPUTED_SOURCES.length; i++) {
+    const { type, indicatorsLowerCase, originalIndicators } = PRECOMPUTED_SOURCES[i];
+    for (let j = 0; j < indicatorsLowerCase.length; j++) {
+      if (lowerText.includes(indicatorsLowerCase[j])) {
         if (!types.includes(type)) {
           types.push(type);
         }
-        details.push(indicator);
+        details.push(originalIndicators[j]);
       }
     }
   }
