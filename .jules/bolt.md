@@ -1,0 +1,3 @@
+## 2024-05-18 - [Optimization of Lexicons Module]
+**Learning:** Pre-computing RegExes and lowercase string variations at module load time significantly accelerates natural language processing routines. Using `String.prototype.match()` with globally-flagged RegExes (`/gi`) securely bypasses state-leakage problems normally associated with `.test()` and `.exec()`, while enabling accurate substring counts.
+**Action:** When working on text analysis engines, aggressively lift dynamic RegEx instantiation (`new RegExp(...)`) and redundant string transformations (e.g., `.toLowerCase()`) out of hot loops.
