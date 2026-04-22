@@ -1,0 +1,3 @@
+## 2024-05-18 - [Optimize Lexicons with Pre-compiled Regex]
+**Learning:** In the text analysis engine (`src/lib/lexicons.ts`), pre-compiled RegExp objects evaluated with `RegExp.prototype.test()` must not use the global (`g`) flag to avoid maintaining `lastIndex` state across executions, which causes false negatives. However, using `String.prototype.match()` with the `g` flag safely avoids `lastIndex` state carryover and is ideal for counting overlapping matches.
+**Action:** When pre-compiling regexes for match counting in text analysis loops, use `String.prototype.match(regex)` with the `g` flag. Avoid `RegExp.prototype.test(string)` with the `g` flag if reusing the same regex object across multiple strings.
