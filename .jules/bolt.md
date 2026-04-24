@@ -1,0 +1,4 @@
+
+## 2024-05-18 - [Optimize N+1 queries in analytics dashboard]
+**Learning:** In `src/lib/analytics.ts`, dashboard functions commonly suffer from N+1 query patterns using `Promise.all` and `findMany` over arrays of strings (like outlet names). When converting these to a batched Prisma `OR` query, you must explicitly include the filtering field (e.g., `source: true`) in the Prisma `select` statement so that the in-memory reconstruction loop can correctly group the fetched articles back to their original requested items using `.filter(item => item.source?.toLowerCase().includes(source.toLowerCase()))`.
+**Action:** When replacing N+1 Prisma queries with batched `IN` or `OR` queries, always ensure the fields necessary for in-memory grouping/matching are added to the Prisma `select` payload, and include an empty array guard clause to prevent full table scans.
