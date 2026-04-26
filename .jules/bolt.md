@@ -1,0 +1,4 @@
+
+## 2024-05-30 - N+1 Query in Source Comparison
+**Learning:** The `compareSources` function in `src/lib/analytics.ts` contained an N+1 query vulnerability when iterating over a user-provided array of source strings. Using `Promise.all` with individual `findMany` contains checks inside the `.map` resulted in multiple database queries.
+**Action:** Replace `Promise.all` + `.map` with a single batched `findMany` query utilizing Prisma's `OR` operator mapped over the sources. Then, use case-insensitive in-memory filtering (e.g., `item.source.toLowerCase().includes(target.toLowerCase())`) to accurately associate the results with each target source, dramatically reducing database round-trips while preserving the case-insensitive database matching behavior. Always include a guard clause (`if (!sources || sources.length === 0) return ...`) before executing dynamic `OR` queries to prevent unexpected errors.
