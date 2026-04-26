@@ -283,28 +283,35 @@ export async function compareSources(sources: string[]): Promise<{
   commonTopics: string[];
   coverageGap: { topic: string; missing: string[] }[];
 }> {
-  const sourceData = await Promise.all(
-    sources.map(async (source) => {
-      const articles = await db.article.findMany({
-        where: {
-          source: { contains: source, mode: 'insensitive' },
-          leftWingSummary: { not: null },
-        },
-        select: { spectrumScore: true, category: true },
-      });
+  if (!sources || sources.length === 0) {
+    return { sources: [], commonTopics: [], coverageGap: [] };
+  }
 
-      const outlet = getOutletInfo(source);
-      const avgBias = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (articles.length || 1);
+  // Optimize N+1 query: Fetch all relevant articles in a single query
+  const allArticles = await db.article.findMany({
+    where: {
+      OR: sources.map(source => ({ source: { contains: source, mode: 'insensitive' } })),
+      leftWingSummary: { not: null },
+    },
+    select: { source: true, spectrumScore: true, category: true },
+  });
 
-      return {
-        name: outlet?.name || source,
-        avgBias,
-        count: articles.length,
-        reliability: outlet?.reliabilityScore || 50,
-        topics: articles.map(a => a.category).filter(Boolean) as string[],
-      };
-    })
-  );
+  const sourceData = sources.map(source => {
+    // In-memory filtering replicating the DB 'contains' match
+    const lowerSource = source.toLowerCase();
+    const articles = allArticles.filter(a => a.source.toLowerCase().includes(lowerSource));
+
+    const outlet = getOutletInfo(source);
+    const avgBias = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (articles.length || 1);
+
+    return {
+      name: outlet?.name || source,
+      avgBias,
+      count: articles.length,
+      reliability: outlet?.reliabilityScore || 50,
+      topics: articles.map(a => a.category).filter(Boolean) as string[],
+    };
+  });
 
   // Find common topics
   const allTopics = new Set<string>();
