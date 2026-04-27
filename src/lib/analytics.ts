@@ -86,63 +86,71 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   }
 
   try {
-    // Get all analyzed articles
-    const articles = await db.article.findMany({
-      where: {
-        leftWingSummary: { not: null },
-      },
-      select: {
-        id: true,
-        source: true,
-        spectrumScore: true,
-        category: true,
-        createdAt: true,
-      },
-    });
+    // Parallelize all aggregation queries
+    const [
+      totalArticles,
+      analyzedAgg,
+      sourceAgg,
+      topicAgg,
+      leftCount,
+      centerCount,
+      rightCount
+    ] = await Promise.all([
+      db.article.count(),
+      db.article.aggregate({
+        where: { leftWingSummary: { not: null } },
+        _count: { _all: true },
+        _avg: { spectrumScore: true },
+      }),
+      db.article.groupBy({
+        by: ['source'],
+        where: { leftWingSummary: { not: null } },
+        _count: { _all: true },
+        _avg: { spectrumScore: true },
+      }),
+      db.article.groupBy({
+        by: ['category'],
+        where: { leftWingSummary: { not: null }, category: { not: null } },
+        _count: { _all: true },
+      }),
+      db.article.count({
+        where: { leftWingSummary: { not: null }, spectrumScore: { lt: -1 } },
+      }),
+      db.article.count({
+        where: { leftWingSummary: { not: null }, spectrumScore: { gte: -1, lte: 1 } },
+      }),
+      db.article.count({
+        where: { leftWingSummary: { not: null }, spectrumScore: { gt: 1 } },
+      }),
+    ]);
 
-    const totalArticles = await db.article.count();
-    const analyzedArticles = articles.length;
+    const analyzedArticles = analyzedAgg._count._all;
+    const avgBiasScore = analyzedAgg._avg.spectrumScore || 0;
 
-    // Calculate average bias
-    const avgBiasScore = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (analyzedArticles || 1);
-
-    // Source distribution
-    const sourceCounts = new Map<string, { count: number; bias: number }>();
-    articles.forEach(a => {
-      const existing = sourceCounts.get(a.source) || { count: 0, bias: 0 };
-      sourceCounts.set(a.source, {
-        count: existing.count + 1,
-        bias: existing.bias + (a.spectrumScore || 0),
-      });
-    });
-
-    const topSources = Array.from(sourceCounts.entries())
-      .map(([source, data]) => ({
-        source,
-        count: data.count,
-        avgBias: data.bias / data.count,
+    // Source distribution mapped from native group by
+    const topSources = sourceAgg
+      .map((data: { source: string; _count: { _all: number }; _avg: { spectrumScore: number | null } }) => ({
+        source: data.source,
+        count: data._count._all,
+        avgBias: data._avg.spectrumScore || 0,
       }))
-      .sort((a, b) => b.count - a.count)
+      .sort((a: { count: number }, b: { count: number }) => b.count - a.count)
       .slice(0, 10);
 
-    // Bias distribution
+    // Bias distribution mapped from counts
     const biasDistribution = {
-      left: articles.filter(a => (a.spectrumScore || 0) < -1).length,
-      center: articles.filter(a => Math.abs(a.spectrumScore || 0) <= 1).length,
-      right: articles.filter(a => (a.spectrumScore || 0) > 1).length,
+      left: leftCount,
+      center: centerCount,
+      right: rightCount,
     };
 
-    // Topic distribution
-    const topicCounts = new Map<string, number>();
-    articles.forEach(a => {
-      if (a.category) {
-        topicCounts.set(a.category, (topicCounts.get(a.category) || 0) + 1);
-      }
-    });
-
-    const topicDistribution = Array.from(topicCounts.entries())
-      .map(([topic, count]) => ({ topic, count }))
-      .sort((a, b) => b.count - a.count);
+    // Topic distribution mapped from native group by
+    const topicDistribution = topicAgg
+      .map((data: { category: string | null; _count: { _all: number } }) => ({
+        topic: data.category as string,
+        count: data._count._all,
+      }))
+      .sort((a: { count: number }, b: { count: number }) => b.count - a.count);
 
     // Recent trends (last 7 days)
     const recentTrends = await getRecentTrends();
