@@ -205,47 +205,55 @@ export async function fetchHeadlinesFromRSS(): Promise<FetchedHeadlines> {
  * Store articles in database (ALWAYS happens regardless of AI)
  */
 export async function storeArticlesInDatabase(articles: RawArticle[]): Promise<number> {
-  let stored = 0;
-  
-  for (const article of articles) {
-    try {
-      // Check if article already exists
-      const existing = await db.article.findFirst({
-        where: {
-          url: article.url,
-        },
-      });
+  if (!articles || articles.length === 0) return 0;
+
+  try {
+    // 1. Fetch all existing URLs in a single query (solves N+1 findFirst issue)
+    const existing = await db.article.findMany({
+      where: {
+        url: { in: articles.map(a => a.url) }
+      },
+      select: { url: true }
+    });
+
+    // 2. Track seen URLs to prevent intra-batch duplicates and database duplicates
+    const seenUrls = new Set(existing.map(a => a.url));
+    const articlesToCreate = [];
+
+    // 3. Prepare valid articles
+    for (const article of articles) {
+      if (seenUrls.has(article.url)) continue;
       
-      if (existing) {
-        continue; // Skip duplicates
-      }
-      
-      // Get outlet bias for initial categorization
+      seenUrls.add(article.url);
       const outlet = getOutletInfo(article.domain);
       
-      // Create article in database
-      await db.article.create({
-        data: {
-          id: crypto.randomUUID(),
-          title: article.title,
-          url: article.url,
-          source: article.source,
-          publishedAt: article.publishedAt,
-          category: 'Politics',
-          spectrumScore: outlet?.biasScore || 0,
-          popularityScore: 'Medium',
-          aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
-          updatedAt: new Date(),
-        },
+      articlesToCreate.push({
+        id: crypto.randomUUID(),
+        title: article.title,
+        url: article.url,
+        source: article.source,
+        publishedAt: article.publishedAt,
+        category: 'Politics',
+        spectrumScore: outlet?.biasScore || 0,
+        popularityScore: 'Medium',
+        aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
+        updatedAt: new Date(),
       });
-      
-      stored++;
-    } catch (error) {
-      console.error(`Error storing article "${article.title}":`, error);
     }
+
+    // 4. Batch insert remaining articles
+    if (articlesToCreate.length > 0) {
+      await db.article.createMany({
+        data: articlesToCreate
+      });
+      return articlesToCreate.length;
+    }
+
+    return 0;
+  } catch (error) {
+    console.error('Error in batch storing articles:', error);
+    return 0;
   }
-  
-  return stored;
 }
 
 /**
