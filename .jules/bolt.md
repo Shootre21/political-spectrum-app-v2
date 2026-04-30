@@ -1,0 +1,3 @@
+## 2025-02-23 - Optimize Prisma N+1 with in-memory case-insensitive match
+**Learning:** When removing N+1 queries by aggregating Prisma `contains: mode: "insensitive"` conditions into an `OR` array, the results require post-processing to group matches by the original arguments. The original case-insensitive behavior can be perfectly replicated in memory using `.filter(item => item.field?.toLowerCase().includes(searchValue.toLowerCase()))`.
+**Action:** Next time an N+1 query string-search is batched, remember to apply this exact in-memory post-processing `.filter()` pattern, ensuring proper `undefined` handling via optional chaining (`?.`), to faithfully preserve application behavior.
