@@ -1,0 +1,3 @@
+## 2026-05-06 - Pre-computing RegExps and Lowercase Arrays at Module Scope
+**Learning:** Re-instantiating `new RegExp(..., 'gi')` and running `.toLowerCase()` on arrays mapping inside hot loops (like text analysis functions in `src/lib/lexicons.ts`) is highly inefficient and creates significant garbage collection overhead. Furthermore, `.filter()` checks the entire array when finding a match, which is slower than a `for` loop with an early `break` for existence checks.
+**Action:** Always extract loop-invariant object creation (especially Regex and lowercased arrays) to the module scope to compile/process them once upon initialization. For existence checks (`detectTopic`), use a standard `for` loop to allow for an early exit.
