@@ -347,6 +347,17 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Pre-compiled regex arrays to improve performance during text analysis
+export const PRECOMPILED_TOPIC_REGEX: Record<string, { left: RegExp[], right: RegExp[] }> = {};
+for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
+  PRECOMPILED_TOPIC_REGEX[topic] = {
+    left: lexicon.leftTerms.map(term => new RegExp(term, 'gi')),
+    right: lexicon.rightTerms.map(term => new RegExp(term, 'gi')),
+  };
+}
+
+export const PRECOMPILED_EMOTIONAL_REGEX = EMOTIONAL_LEXICON.highEmotion.map(word => new RegExp(word, 'gi'));
+
 /**
  * Detect topic from text
  */
@@ -355,9 +366,24 @@ export function detectTopic(text: string): string[] {
   const lowerText = text.toLowerCase();
   
   for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
+    let found = false;
+    for (const term of lexicon.leftTerms) {
+      if (lowerText.includes(term.toLowerCase())) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      for (const term of lexicon.rightTerms) {
+        if (lowerText.includes(term.toLowerCase())) {
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (found) {
       topics.push(topic);
     }
   }
@@ -369,26 +395,22 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
-  
-  const lowerText = text.toLowerCase();
+  const regexLexicon = PRECOMPILED_TOPIC_REGEX[topic];
+  if (!regexLexicon) return 0;
   
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  for (const regex of regexLexicon.left) {
+    const matches = text.match(regex);
     if (matches) {
       score -= matches.length * 0.5;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+  for (const regex of regexLexicon.right) {
+    const matches = text.match(regex);
     if (matches) {
       score += matches.length * 0.5;
     }
@@ -401,13 +423,11 @@ export function calculateFramingScore(text: string, topic: string): number {
  * Calculate emotional intensity score
  */
 export function calculateEmotionalScore(text: string): number {
-  const lowerText = text.toLowerCase();
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
+  for (const regex of PRECOMPILED_EMOTIONAL_REGEX) {
+    const matches = text.match(regex);
     if (matches) {
       score += matches.length * 2;
     }
@@ -483,7 +503,7 @@ export function extractSources(text: string): { types: string[]; count: number; 
   
   for (const [type, indicators] of Object.entries(SOURCE_TYPE_INDICATORS)) {
     for (const indicator of indicators) {
-      if (lowerText.includes(indicator)) {
+      if (lowerText.includes(indicator.toLowerCase())) {
         if (!types.includes(type)) {
           types.push(type);
         }
