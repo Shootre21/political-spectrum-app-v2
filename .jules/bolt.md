@@ -1,0 +1,3 @@
+## 2024-05-13 - Optimize RegExp instantiation in text analysis
+**Learning:** Instantiating `new RegExp(..., 'gi')` inside hot loop functions (`calculateFramingScore` and `calculateEmotionalScore`) causes significant memory allocations and slows down performance on large strings. `String.prototype.match(regex)` with a global `/g/` regex is completely stateless and safe to reuse.
+**Action:** Pre-compile static patterns into RegExp objects at the module level whenever possible. When re-using global regexes across multiple function calls, rely on `String.prototype.match` instead of stateful methods like `RegExp.prototype.exec`.
