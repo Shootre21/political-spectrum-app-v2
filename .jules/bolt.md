@@ -1,0 +1,3 @@
+## 2024-05-23 - RegExp performance and state
+**Learning:** `String.prototype.match(regex)` with a global flag (`g`) is stateless because it ignores `lastIndex` on the Regular Expression object. This is a crucial, safe performance optimization compared to `RegExp.prototype.exec()` which retains state across loops. Pre-compiling regexes at module scope instead of locally inside functions drastically reduces CPU overhead for text analysis without risking shared-state bugs.
+**Action:** Always prefer pre-compiling global regular expressions at the module scope for repeated string matching over generating them inside hot functions.
