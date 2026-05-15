@@ -1,0 +1,3 @@
+## 2025-03-09 - Prisma JS Memory Exhaustion in Aggregations
+**Learning:** Using `db.article.findMany()` inside API loops to manually calculate averages, counts, and groups using JavaScript array methods (`.reduce`, `.filter`, `Map`) forces SQLite to serialize the entire table into Node.js memory. This causes massive O(N) memory allocation and transfers huge JSON payloads unnecessarily.
+**Action:** Always replace programmatic `findMany` analytics logic with Prisma's native `aggregate`, `groupBy`, and parallel `count` queries to achieve O(1) memory overhead and delegate calculation to the underlying SQLite engine.
