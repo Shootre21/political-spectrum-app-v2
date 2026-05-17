@@ -205,47 +205,97 @@ export async function fetchHeadlinesFromRSS(): Promise<FetchedHeadlines> {
  * Store articles in database (ALWAYS happens regardless of AI)
  */
 export async function storeArticlesInDatabase(articles: RawArticle[]): Promise<number> {
-  let stored = 0;
-  
-  for (const article of articles) {
-    try {
-      // Check if article already exists
-      const existing = await db.article.findFirst({
-        where: {
-          url: article.url,
+  if (articles.length === 0) return 0;
+
+  try {
+    // 1. Deduplicate incoming articles by URL in-memory
+    const uniqueArticles = Array.from(new Map(articles.map(a => [a.url, a])).values());
+    const urls = uniqueArticles.map(a => a.url);
+
+    // 2. Perform a single batched query to find existing articles
+    const existingRecords = await db.article.findMany({
+      where: {
+        url: {
+          in: urls,
         },
-      });
-      
-      if (existing) {
-        continue; // Skip duplicates
-      }
-      
-      // Get outlet bias for initial categorization
+      },
+      select: { url: true },
+    });
+
+    const existingUrls = new Set(existingRecords.map(r => r.url));
+
+    // 3. Filter to find truly new articles
+    const newArticles = uniqueArticles.filter(a => !existingUrls.has(a.url));
+
+    if (newArticles.length === 0) return 0;
+
+    // 4. Prepare payload for new articles
+    const articlesToCreate = newArticles.map(article => {
       const outlet = getOutletInfo(article.domain);
-      
-      // Create article in database
-      await db.article.create({
-        data: {
-          id: crypto.randomUUID(),
-          title: article.title,
-          url: article.url,
-          source: article.source,
-          publishedAt: article.publishedAt,
-          category: 'Politics',
-          spectrumScore: outlet?.biasScore || 0,
-          popularityScore: 'Medium',
-          aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
-          updatedAt: new Date(),
-        },
+      return {
+        id: crypto.randomUUID(),
+        title: article.title,
+        url: article.url,
+        source: article.source,
+        publishedAt: article.publishedAt,
+        category: 'Politics',
+        spectrumScore: outlet?.biasScore || 0,
+        popularityScore: 'Medium',
+        aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
+        updatedAt: new Date(),
+      };
+    });
+
+    // 5. Try bulk insertion first, fallback to sequential if it fails (e.g. SQLite proxy limits)
+    try {
+      const result = await db.article.createMany({
+        data: articlesToCreate,
       });
-      
-      stored++;
-    } catch (error) {
-      console.error(`Error storing article "${article.title}":`, error);
+      return result.count;
+    } catch (bulkError) {
+      console.warn(`Bulk insert failed, falling back to sequential:`, bulkError);
+      let stored = 0;
+      for (const articleData of articlesToCreate) {
+        try {
+          await db.article.create({ data: articleData });
+          stored++;
+        } catch (seqError) {
+          console.error(`Error storing article "${articleData.title}":`, seqError);
+        }
+      }
+      return stored;
     }
+  } catch (error) {
+    console.error(`Error in storeArticlesInDatabase bulk operation:`, error);
+    // If the whole batch fails initially, fallback to the old sequential logic as a last resort
+    let stored = 0;
+    for (const article of articles) {
+      try {
+        const existing = await db.article.findFirst({ where: { url: article.url } });
+        if (existing) continue;
+
+        const outlet = getOutletInfo(article.domain);
+        await db.article.create({
+          data: {
+            id: crypto.randomUUID(),
+            title: article.title,
+            url: article.url,
+            source: article.source,
+            publishedAt: article.publishedAt,
+            category: 'Politics',
+            spectrumScore: outlet?.biasScore || 0,
+            popularityScore: 'Medium',
+            aiProvider: 'RSS',
+            updatedAt: new Date(),
+          },
+        });
+        stored++;
+      } catch (seqError) {
+        console.error(`Error storing article "${article.title}":`, seqError);
+      }
+    }
+    return stored;
   }
-  
-  return stored;
 }
 
 /**
