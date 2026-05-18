@@ -205,47 +205,91 @@ export async function fetchHeadlinesFromRSS(): Promise<FetchedHeadlines> {
  * Store articles in database (ALWAYS happens regardless of AI)
  */
 export async function storeArticlesInDatabase(articles: RawArticle[]): Promise<number> {
-  let stored = 0;
-  
-  for (const article of articles) {
-    try {
-      // Check if article already exists
-      const existing = await db.article.findFirst({
-        where: {
-          url: article.url,
-        },
-      });
-      
-      if (existing) {
-        continue; // Skip duplicates
-      }
-      
-      // Get outlet bias for initial categorization
-      const outlet = getOutletInfo(article.domain);
-      
-      // Create article in database
-      await db.article.create({
-        data: {
-          id: crypto.randomUUID(),
-          title: article.title,
-          url: article.url,
-          source: article.source,
-          publishedAt: article.publishedAt,
-          category: 'Politics',
-          spectrumScore: outlet?.biasScore || 0,
-          popularityScore: 'Medium',
-          aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
-          updatedAt: new Date(),
-        },
-      });
-      
-      stored++;
-    } catch (error) {
-      console.error(`Error storing article "${article.title}":`, error);
+  if (articles.length === 0) return 0;
+
+  // Deduplicate incoming articles by URL to prevent intra-batch unique constraint violations
+  const uniqueArticles = Array.from(new Map(articles.map(a => [a.url, a])).values());
+  const urls = uniqueArticles.map(a => a.url);
+
+  try {
+    // 1. Fetch all existing URLs in one query (N+1 -> 1)
+    const existingRecords = await db.article.findMany({
+      where: { url: { in: urls } },
+      select: { url: true }
+    });
+    const existingUrls = new Set(existingRecords.map(r => r.url));
+
+    // 2. Filter out already existing articles
+    const newArticles = uniqueArticles.filter(a => !existingUrls.has(a.url));
+
+    if (newArticles.length === 0) {
+      return 0; // Everything already exists
     }
+
+    // 3. Prepare data for batch insert
+    const now = new Date();
+    const recordsToCreate = newArticles.map(article => {
+      const outlet = getOutletInfo(article.domain);
+      return {
+        id: crypto.randomUUID(),
+        title: article.title,
+        url: article.url,
+        source: article.source,
+        publishedAt: article.publishedAt,
+        category: 'Politics',
+        spectrumScore: outlet?.biasScore || 0,
+        popularityScore: 'Medium',
+        aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
+        updatedAt: now,
+      };
+    });
+
+    // 4. Batch insert (N+1 -> 1)
+    const result = await db.article.createMany({
+      data: recordsToCreate,
+    });
+
+    return result.count;
+  } catch (error) {
+    console.error('Batched insert failed, falling back to sequential insert:', error);
+
+    // Fallback: Sequential insertion with in-memory set to prevent duplicates
+    let stored = 0;
+    const seenUrls = new Set<string>();
+
+    for (const article of uniqueArticles) {
+      if (seenUrls.has(article.url)) continue;
+      seenUrls.add(article.url);
+      
+      try {
+        const existing = await db.article.findFirst({
+          where: { url: article.url },
+        });
+
+        if (existing) continue;
+
+        const outlet = getOutletInfo(article.domain);
+        await db.article.create({
+          data: {
+            id: crypto.randomUUID(),
+            title: article.title,
+            url: article.url,
+            source: article.source,
+            publishedAt: article.publishedAt,
+            category: 'Politics',
+            spectrumScore: outlet?.biasScore || 0,
+            popularityScore: 'Medium',
+            aiProvider: 'RSS',
+            updatedAt: new Date(),
+          },
+        });
+        stored++;
+      } catch (innerError) {
+        console.error(`Error storing article sequentially "${article.title}":`, innerError);
+      }
+    }
+    return stored;
   }
-  
-  return stored;
 }
 
 /**
