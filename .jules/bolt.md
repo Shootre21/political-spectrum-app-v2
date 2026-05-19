@@ -1,0 +1,3 @@
+## 2024-05-18 - Replacing N+1 queries with findMany(in) requires deduplication
+**Learning:** When removing N+1 database existence checks (e.g. `findFirst` in a loop) in favor of a batched `findMany({ where: { url: { in: urls } } })`, you must also deduplicate the incoming array in memory beforehand. Otherwise, if the batch contains duplicate URLs that aren't yet in the database, the batch insertion (`createMany`) will attempt to insert the same unique constraint twice and fail.
+**Action:** Always wrap `items` in an `Array.from(new Map(items.map(i => [i.key, i])).values())` construct to deduplicate intra-batch items before running the batched existence check and insertion logic.
