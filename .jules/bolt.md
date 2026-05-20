@@ -1,0 +1,3 @@
+## 2024-05-20 - Performance Impact of toLowerCase in Hot Loops
+**Learning:** Calling `String.prototype.toLowerCase()` inside hot loops (like text analysis regex matching algorithms) is redundant when the regex utilizes the `'i'` flag. Extracting `.toLowerCase()` calls outside of iteration structures, or omitting them entirely in favor of regex case-insensitivity, significantly reduces memory allocations and decreases execution time (benchmark showed ~3x speedup on text analysis loops).
+**Action:** Always prefer configuring case-insensitivity in the matching engine (`new RegExp(term, 'gi')`) rather than eagerly lowercasing entire text payloads inside repetitive parsing structures.

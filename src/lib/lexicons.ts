@@ -372,14 +372,12 @@ export function calculateFramingScore(text: string, topic: string): number {
   const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
   if (!lexicon) return 0;
   
-  const lowerText = text.toLowerCase();
-  
   let score = 0;
   
   // Count left-framing terms
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+    const regex = new RegExp(term, 'gi');
+    const matches = text.match(regex);
     if (matches) {
       score -= matches.length * 0.5;
     }
@@ -387,8 +385,8 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
+    const regex = new RegExp(term, 'gi');
+    const matches = text.match(regex);
     if (matches) {
       score += matches.length * 0.5;
     }
@@ -401,13 +399,12 @@ export function calculateFramingScore(text: string, topic: string): number {
  * Calculate emotional intensity score
  */
 export function calculateEmotionalScore(text: string): number {
-  const lowerText = text.toLowerCase();
   let score = 0;
   
   // Count high-emotion words
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
     const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
+    const matches = text.match(regex);
     if (matches) {
       score += matches.length * 2;
     }
