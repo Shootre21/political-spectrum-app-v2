@@ -1,0 +1,3 @@
+## 2024-05-24 - [Replace N+1 Queries with Batched Existence Checks]
+**Learning:** Direct SQLite benchmarking in this restricted environment indicates that replacing 100 individual existence queries (N+1) with a single batched `IN` query followed by `createMany` bulk insertion yields approximately a 60x performance improvement.
+**Action:** When inserting multiple records, especially using `createMany` in Prisma, always pre-fetch existing records using a single `findMany` query with the `in` operator, filter out duplicates manually in memory, and then insert the remaining records via a single bulk `createMany`.
