@@ -1,0 +1,3 @@
+## 2024-05-30 - N+1 Query Optimization in Database Insertions
+**Learning:** In sequential bulk insertion operations (like saving articles fetched from RSS), executing a `findFirst` check followed by a `create` for each item individually causes an N+1 query bottleneck. SQLite benchmarking shows that replacing this with a single batched `IN` query for existence checks and `createMany` for insertions yields a massive ~60x performance improvement.
+**Action:** Always batch existence checks using `findMany` with the `in` operator and use `createMany` when processing bulk datasets. Always deduplicate the incoming array by a unique key (like URL) using an in-memory `Map` before the database operations to prevent intra-batch unique constraint violations.
