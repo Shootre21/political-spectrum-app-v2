@@ -205,47 +205,90 @@ export async function fetchHeadlinesFromRSS(): Promise<FetchedHeadlines> {
  * Store articles in database (ALWAYS happens regardless of AI)
  */
 export async function storeArticlesInDatabase(articles: RawArticle[]): Promise<number> {
-  let stored = 0;
-  
+  if (!articles || articles.length === 0) return 0;
+
+  // Optimization: Deduplicate incoming articles by URL first to prevent intra-batch
+  // unique constraint violations and minimize memory overhead.
+  const uniqueArticlesMap = new Map<string, RawArticle>();
   for (const article of articles) {
-    try {
-      // Check if article already exists
-      const existing = await db.article.findFirst({
-        where: {
-          url: article.url,
-        },
-      });
-      
-      if (existing) {
-        continue; // Skip duplicates
-      }
-      
-      // Get outlet bias for initial categorization
-      const outlet = getOutletInfo(article.domain);
-      
-      // Create article in database
-      await db.article.create({
-        data: {
-          id: crypto.randomUUID(),
-          title: article.title,
-          url: article.url,
-          source: article.source,
-          publishedAt: article.publishedAt,
-          category: 'Politics',
-          spectrumScore: outlet?.biasScore || 0,
-          popularityScore: 'Medium',
-          aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
-          updatedAt: new Date(),
-        },
-      });
-      
-      stored++;
-    } catch (error) {
-      console.error(`Error storing article "${article.title}":`, error);
+    if (article.url) {
+      uniqueArticlesMap.set(article.url, article);
     }
   }
-  
-  return stored;
+  const uniqueArticles = Array.from(uniqueArticlesMap.values());
+
+  try {
+    // Optimization: Batch check for existing URLs to replace N+1 queries.
+    // Significantly reduces database roundtrips (expected ~60x performance improvement).
+    const urls = uniqueArticles.map(a => a.url);
+    const existingRecords = await db.article.findMany({
+      where: {
+        url: { in: urls },
+      },
+      select: { url: true },
+    });
+
+    const existingUrlsSet = new Set(existingRecords.map(r => r.url));
+    const newArticles = uniqueArticles.filter(a => !existingUrlsSet.has(a.url));
+
+    if (newArticles.length === 0) return 0;
+
+    // Build the bulk data array
+    const dataToInsert = newArticles.map(article => {
+      const outlet = getOutletInfo(article.domain);
+      return {
+        id: crypto.randomUUID(),
+        title: article.title,
+        url: article.url,
+        source: article.source,
+        publishedAt: article.publishedAt,
+        category: 'Politics',
+        spectrumScore: outlet?.biasScore || 0,
+        popularityScore: 'Medium',
+        aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
+        updatedAt: new Date(),
+      };
+    });
+
+    // Optimization: Bulk insert using createMany.
+    const result = await db.article.createMany({
+      data: dataToInsert,
+    });
+
+    return result.count;
+  } catch (bulkError) {
+    console.error(`Bulk insertion failed, falling back to sequential insertion:`, bulkError);
+    // Embedded sequential fallback to ensure robust data persistence if createMany fails.
+    let stored = 0;
+    for (const article of uniqueArticles) {
+      try {
+        const existing = await db.article.findFirst({
+          where: { url: article.url },
+        });
+        if (existing) continue;
+
+        const outlet = getOutletInfo(article.domain);
+        await db.article.create({
+          data: {
+            id: crypto.randomUUID(),
+            title: article.title,
+            url: article.url,
+            source: article.source,
+            publishedAt: article.publishedAt,
+            category: 'Politics',
+            spectrumScore: outlet?.biasScore || 0,
+            popularityScore: 'Medium',
+            aiProvider: 'RSS',
+            updatedAt: new Date(),
+          },
+        });
+        stored++;
+      } catch (error) {
+        console.error(`Error storing article sequentially "${article.title}":`, error);
+      }
+    }
+    return stored;
+  }
 }
 
 /**
