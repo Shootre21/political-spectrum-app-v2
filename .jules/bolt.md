@@ -1,0 +1,3 @@
+## 2025-05-24 - Replace findMany analytics aggregations with native Prisma queries
+**Learning:** Using `findMany` to pull all database records into memory to manually calculate averages, counts, and grouping arrays creates an O(N) memory bottleneck and severely degrades performance on analytical endpoints.
+**Action:** When calculating statistics or aggregations (e.g., getting the count of items in a category, or the average of a specific column), always use Prisma's native `count()`, `aggregate()`, and `groupBy()` methods to keep memory consumption at O(1) and shift processing to the database. Run these aggregations in parallel using `Promise.all` to minimize total latency.
