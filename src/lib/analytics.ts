@@ -86,66 +86,67 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   }
 
   try {
-    // Get all analyzed articles
-    const articles = await db.article.findMany({
-      where: {
-        leftWingSummary: { not: null },
-      },
-      select: {
-        id: true,
-        source: true,
-        spectrumScore: true,
-        category: true,
-        createdAt: true,
-      },
-    });
+    // Execute multiple database queries in parallel for efficiency
+    const [
+      totalArticles,
+      analyzedArticles,
+      aggStats,
+      sourceGroups,
+      topicGroups,
+      leftCount,
+      rightCount,
+      recentTrends
+    ] = await Promise.all([
+      db.article.count(),
+      db.article.count({ where: { leftWingSummary: { not: null } } }),
+      db.article.aggregate({
+        where: { leftWingSummary: { not: null } },
+        _sum: { spectrumScore: true }
+      }),
+      db.article.groupBy({
+        by: ['source'],
+        where: { leftWingSummary: { not: null } },
+        _count: { source: true },
+        _sum: { spectrumScore: true }
+      }),
+      db.article.groupBy({
+        by: ['category'],
+        where: { leftWingSummary: { not: null }, category: { not: null } },
+        _count: { category: true }
+      }),
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: { lt: -1 } } }),
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: { gt: 1 } } }),
+      getRecentTrends()
+    ]);
 
-    const totalArticles = await db.article.count();
-    const analyzedArticles = articles.length;
+    // To replicate original behavior, sum is divided by total analyzed articles (including nulls as 0)
+    const avgBiasScore = (aggStats._sum.spectrumScore || 0) / (analyzedArticles || 1);
 
-    // Calculate average bias
-    const avgBiasScore = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (analyzedArticles || 1);
-
-    // Source distribution
-    const sourceCounts = new Map<string, { count: number; bias: number }>();
-    articles.forEach(a => {
-      const existing = sourceCounts.get(a.source) || { count: 0, bias: 0 };
-      sourceCounts.set(a.source, {
-        count: existing.count + 1,
-        bias: existing.bias + (a.spectrumScore || 0),
-      });
-    });
-
-    const topSources = Array.from(sourceCounts.entries())
-      .map(([source, data]) => ({
-        source,
-        count: data.count,
-        avgBias: data.bias / data.count,
+    // Top sources
+    const topSources = sourceGroups
+      .map(group => ({
+        source: group.source,
+        count: group._count.source,
+        // Match original: treating null scores as 0 by dividing total sum by group count
+        avgBias: (group._sum.spectrumScore || 0) / (group._count.source || 1),
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    // Bias distribution
+    // Bias distribution (original behavior treats null as 0, which falls into center)
     const biasDistribution = {
-      left: articles.filter(a => (a.spectrumScore || 0) < -1).length,
-      center: articles.filter(a => Math.abs(a.spectrumScore || 0) <= 1).length,
-      right: articles.filter(a => (a.spectrumScore || 0) > 1).length,
+      left: leftCount,
+      center: analyzedArticles - leftCount - rightCount,
+      right: rightCount,
     };
 
     // Topic distribution
-    const topicCounts = new Map<string, number>();
-    articles.forEach(a => {
-      if (a.category) {
-        topicCounts.set(a.category, (topicCounts.get(a.category) || 0) + 1);
-      }
-    });
-
-    const topicDistribution = Array.from(topicCounts.entries())
-      .map(([topic, count]) => ({ topic, count }))
+    const topicDistribution = topicGroups
+      .map(group => ({
+        topic: group.category as string,
+        count: group._count.category,
+      }))
       .sort((a, b) => b.count - a.count);
-
-    // Recent trends (last 7 days)
-    const recentTrends = await getRecentTrends();
 
     return {
       totalArticles,
@@ -285,23 +286,40 @@ export async function compareSources(sources: string[]): Promise<{
 }> {
   const sourceData = await Promise.all(
     sources.map(async (source) => {
-      const articles = await db.article.findMany({
-        where: {
-          source: { contains: source, mode: 'insensitive' },
-          leftWingSummary: { not: null },
-        },
-        select: { spectrumScore: true, category: true },
-      });
+      const baseWhere = {
+        source: { contains: source, mode: 'insensitive' as const },
+        leftWingSummary: { not: null },
+      };
+
+      const [aggStats, topicGroups] = await Promise.all([
+        db.article.aggregate({
+          where: baseWhere,
+          _count: { _all: true },
+          _sum: { spectrumScore: true }
+        }),
+        db.article.groupBy({
+          by: ['category'],
+          where: { ...baseWhere, category: { not: null } },
+          _count: { category: true }
+        })
+      ]);
 
       const outlet = getOutletInfo(source);
-      const avgBias = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (articles.length || 1);
+      const count = aggStats._count._all;
+      const avgBias = (aggStats._sum.spectrumScore || 0) / (count || 1);
+
+      // Replicate the original behavior of returning an array with duplicates
+      // based on the count of each category.
+      const topics = topicGroups.flatMap(t =>
+        Array.from({ length: t._count.category }, () => t.category as string)
+      );
 
       return {
         name: outlet?.name || source,
         avgBias,
-        count: articles.length,
+        count,
         reliability: outlet?.reliabilityScore || 50,
-        topics: articles.map(a => a.category).filter(Boolean) as string[],
+        topics,
       };
     })
   );
