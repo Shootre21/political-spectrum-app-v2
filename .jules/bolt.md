@@ -1,0 +1,3 @@
+## 2024-05-19 - Prisma CLI and SQLite Data Safety
+**Learning:** When testing Prisma operations against a local SQLite database, the `DATABASE_URL` environment variable must be explicitly provided to the CLI (e.g., `DATABASE_URL="file:./custom.db" bun run prisma db push`) because the application's fallback logic in `src/lib/db.ts` is not invoked. Furthermore, creating and using temporary SQLite files (like `custom.db`) during test runs can pollute the repository if not carefully removed or excluded before committing.
+**Action:** Always clean up generated `.db` files after local testing and explicitly supply connection strings to Prisma CLI commands in restrictive environments to avoid configuration failures and repository bloat.
