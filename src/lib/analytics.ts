@@ -86,70 +86,80 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   }
 
   try {
-    // Get all analyzed articles
-    const articles = await db.article.findMany({
-      where: {
-        leftWingSummary: { not: null },
-      },
-      select: {
-        id: true,
-        source: true,
-        spectrumScore: true,
-        category: true,
-        createdAt: true,
-      },
-    });
+    // Optimize performance: replace O(N) memory fetching with O(1) DB aggregation
+    const analyzedWhere = { leftWingSummary: { not: null } };
 
-    const totalArticles = await db.article.count();
-    const analyzedArticles = articles.length;
+    const [
+      totalArticles,
+      analyzedArticles,
+      biasAgg,
+      sourceGroup,
+      leftCount,
+      centerCount,
+      rightCount,
+      topicGroup,
+      recentTrends
+    ] = await Promise.all([
+      db.article.count(),
+      db.article.count({ where: analyzedWhere }),
+      db.article.aggregate({
+        where: analyzedWhere,
+        _avg: { spectrumScore: true },
+      }),
+      db.article.groupBy({
+        by: ['source'],
+        where: analyzedWhere,
+        _count: { _all: true },
+        _avg: { spectrumScore: true },
+        orderBy: { _count: { source: 'desc' } },
+        take: 10,
+      }),
+      db.article.count({ where: { ...analyzedWhere, spectrumScore: { lt: -1 } } }),
+      db.article.count({ where: { ...analyzedWhere, spectrumScore: { gte: -1, lte: 1 } } }),
+      db.article.count({ where: { ...analyzedWhere, spectrumScore: { gt: 1 } } }),
+      db.article.groupBy({
+        by: ['category'],
+        where: { ...analyzedWhere, category: { not: '' } },
+        _count: { _all: true },
+        orderBy: { _count: { category: 'desc' } },
+      }),
+      getRecentTrends()
+    ]);
 
-    // Calculate average bias
-    const avgBiasScore = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (analyzedArticles || 1);
+    // Handle db proxy returning empty array on fallback
+    const validTotal = typeof totalArticles === 'number' ? totalArticles : 0;
+    const validAnalyzed = typeof analyzedArticles === 'number' ? analyzedArticles : 0;
 
-    // Source distribution
-    const sourceCounts = new Map<string, { count: number; bias: number }>();
-    articles.forEach(a => {
-      const existing = sourceCounts.get(a.source) || { count: 0, bias: 0 };
-      sourceCounts.set(a.source, {
-        count: existing.count + 1,
-        bias: existing.bias + (a.spectrumScore || 0),
-      });
-    });
+    // Average bias score
+    const avgBiasScore = (biasAgg && !Array.isArray(biasAgg) && biasAgg._avg && biasAgg._avg.spectrumScore) || 0;
 
-    const topSources = Array.from(sourceCounts.entries())
-      .map(([source, data]) => ({
-        source,
-        count: data.count,
-        avgBias: data.bias / data.count,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+    // Top sources
+    const validSourceGroup = Array.isArray(sourceGroup) ? sourceGroup : [];
+    const topSources = validSourceGroup.map(g => ({
+      source: g.source,
+      count: g._count._all,
+      avgBias: g._avg.spectrumScore || 0,
+    }));
 
     // Bias distribution
     const biasDistribution = {
-      left: articles.filter(a => (a.spectrumScore || 0) < -1).length,
-      center: articles.filter(a => Math.abs(a.spectrumScore || 0) <= 1).length,
-      right: articles.filter(a => (a.spectrumScore || 0) > 1).length,
+      left: typeof leftCount === 'number' ? leftCount : 0,
+      center: typeof centerCount === 'number' ? centerCount : 0,
+      right: typeof rightCount === 'number' ? rightCount : 0,
     };
 
     // Topic distribution
-    const topicCounts = new Map<string, number>();
-    articles.forEach(a => {
-      if (a.category) {
-        topicCounts.set(a.category, (topicCounts.get(a.category) || 0) + 1);
-      }
-    });
-
-    const topicDistribution = Array.from(topicCounts.entries())
-      .map(([topic, count]) => ({ topic, count }))
-      .sort((a, b) => b.count - a.count);
-
-    // Recent trends (last 7 days)
-    const recentTrends = await getRecentTrends();
+    const validTopicGroup = Array.isArray(topicGroup) ? topicGroup : [];
+    const topicDistribution = validTopicGroup
+      .filter(g => g.category)
+      .map(g => ({
+        topic: g.category as string,
+        count: g._count._all,
+      }));
 
     return {
-      totalArticles,
-      analyzedArticles,
+      totalArticles: validTotal,
+      analyzedArticles: validAnalyzed,
       avgBiasScore,
       avgConfidence: 0.75, // Placeholder
       topSources,
