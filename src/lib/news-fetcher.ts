@@ -207,41 +207,80 @@ export async function fetchHeadlinesFromRSS(): Promise<FetchedHeadlines> {
 export async function storeArticlesInDatabase(articles: RawArticle[]): Promise<number> {
   let stored = 0;
   
-  for (const article of articles) {
-    try {
-      // Check if article already exists
-      const existing = await db.article.findFirst({
-        where: {
-          url: article.url,
-        },
-      });
-      
-      if (existing) {
-        continue; // Skip duplicates
-      }
-      
-      // Get outlet bias for initial categorization
+  if (!articles.length) return stored;
+
+  try {
+    // ⚡ OPTIMIZATION: Batched existence check and insertion
+    // Deduplicate the input array by URL to prevent intra-batch unique constraint violations
+    const uniqueArticles = Array.from(new Map(articles.map(a => [a.url, a])).values());
+    const urls = uniqueArticles.map(a => a.url);
+
+    // Single query to check for existing articles
+    const existingRecords = await db.article.findMany({
+      where: { url: { in: urls } },
+      select: { url: true },
+    });
+
+    const existingUrls = new Set(existingRecords.map(r => r.url));
+    const newArticles = uniqueArticles.filter(a => !existingUrls.has(a.url));
+
+    if (newArticles.length === 0) {
+      return stored;
+    }
+
+    const dataToInsert = newArticles.map(article => {
       const outlet = getOutletInfo(article.domain);
-      
-      // Create article in database
-      await db.article.create({
-        data: {
-          id: crypto.randomUUID(),
-          title: article.title,
-          url: article.url,
-          source: article.source,
-          publishedAt: article.publishedAt,
-          category: 'Politics',
-          spectrumScore: outlet?.biasScore || 0,
-          popularityScore: 'Medium',
-          aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
-          updatedAt: new Date(),
-        },
-      });
-      
-      stored++;
-    } catch (error) {
-      console.error(`Error storing article "${article.title}":`, error);
+      return {
+        id: crypto.randomUUID(), // Manual ID generation since SQLite doesn't support defaults in createMany well
+        title: article.title,
+        url: article.url,
+        source: article.source,
+        publishedAt: article.publishedAt,
+        category: 'Politics',
+        spectrumScore: outlet?.biasScore || 0,
+        popularityScore: 'Medium',
+        aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
+        updatedAt: new Date(), // Explicitly required for createMany
+      };
+    });
+
+    const result = await db.article.createMany({
+      data: dataToInsert,
+    });
+
+    stored += result.count;
+  } catch (error) {
+    console.error('Batch database insertion failed, falling back to sequential insertion:', error);
+
+    // Sequential fallback for robust data persistence
+    for (const article of articles) {
+      try {
+        const existing = await db.article.findFirst({
+          where: { url: article.url },
+        });
+
+        if (existing) continue;
+
+        const outlet = getOutletInfo(article.domain);
+        await db.article.create({
+          data: {
+            id: crypto.randomUUID(),
+            title: article.title,
+            url: article.url,
+            source: article.source,
+            publishedAt: article.publishedAt,
+            category: 'Politics',
+            spectrumScore: outlet?.biasScore || 0,
+            popularityScore: 'Medium',
+            aiProvider: 'RSS',
+            updatedAt: new Date(),
+          },
+        });
+
+        stored++;
+      } catch (innerError) {
+        console.error(`Error storing article "${article.title}":`, innerError);
+      }
     }
   }
   
