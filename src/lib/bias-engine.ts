@@ -184,16 +184,20 @@ function generateEvidence(text: string, headline: string): BiasAnalysisResult['e
   
   // Extract framing terms
   const framingTerms: { term: string; leaning: 'left' | 'right' }[] = [];
-  for (const topic of topics) {
+  const lowerText = text.toLowerCase();
+
+  for (let t = 0; t < topics.length; t++) {
+    const topic = topics[t];
     const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
     if (lexicon) {
-      const lowerText = text.toLowerCase();
-      for (const term of lexicon.leftTerms) {
+      for (let i = 0; i < lexicon.leftTerms.length; i++) {
+        const term = lexicon.leftTerms[i];
         if (lowerText.includes(term.toLowerCase())) {
           framingTerms.push({ term, leaning: 'left' });
         }
       }
-      for (const term of lexicon.rightTerms) {
+      for (let i = 0; i < lexicon.rightTerms.length; i++) {
+        const term = lexicon.rightTerms[i];
         if (lowerText.includes(term.toLowerCase())) {
           framingTerms.push({ term, leaning: 'right' });
         }
