@@ -347,6 +347,52 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Fast occurrence counter helper
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while (true) {
+    pos = text.indexOf(term, pos);
+    if (pos >= 0) {
+      count++;
+      pos += term.length;
+    } else {
+      break;
+    }
+  }
+  return count;
+}
+
+// Pre-computed lowercase arrays for hot-path optimization
+const PRECOMPUTED_TOPICS_LOWER = Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => {
+  return {
+    topic,
+    terms: [...lexicon.leftTerms, ...lexicon.rightTerms].map(t => t.toLowerCase())
+  };
+});
+
+const PRECOMPUTED_FRAMING_LOWER: Record<string, { left: string[], right: string[] }> = {};
+for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
+  PRECOMPUTED_FRAMING_LOWER[topic] = {
+    left: lexicon.leftTerms.map(t => t.toLowerCase()),
+    right: lexicon.rightTerms.map(t => t.toLowerCase())
+  };
+}
+
+const PRECOMPUTED_EMOTIONAL_LOWER = EMOTIONAL_LEXICON.highEmotion.map(t => t.toLowerCase());
+const PRECOMPUTED_PARTISAN_LOWER = EMOTIONAL_LEXICON.partisanMarkers.map(t => t.toLowerCase());
+const PRECOMPUTED_AUTHORITARIAN_LOWER = EMOTIONAL_LEXICON.authoritarianMarkers.map(t => t.toLowerCase());
+const PRECOMPUTED_SOCIALIST_LOWER = EMOTIONAL_LEXICON.socialistMarkers.map(t => t.toLowerCase());
+
+const PRECOMPUTED_SOURCES_LOWER = Object.entries(SOURCE_TYPE_INDICATORS).map(([type, indicators]) => {
+  return {
+    type,
+    indicators: indicators.map(t => t.toLowerCase()),
+    originalIndicators: indicators
+  }
+});
+
 /**
  * Detect topic from text
  */
@@ -354,11 +400,12 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (const { topic, terms } of PRECOMPUTED_TOPICS_LOWER) {
+    for (const term of terms) {
+      if (lowerText.includes(term)) {
+        topics.push(topic);
+        break; // Only need one match to detect the topic
+      }
     }
   }
   
@@ -369,29 +416,20 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const cached = PRECOMPUTED_FRAMING_LOWER[topic];
+  if (!cached) return 0;
   
   const lowerText = text.toLowerCase();
-  
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+  for (const term of cached.left) {
+    score -= countOccurrences(lowerText, term) * 0.5;
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+  for (const term of cached.right) {
+    score += countOccurrences(lowerText, term) * 0.5;
   }
   
   return score;
@@ -405,12 +443,8 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
-    }
+  for (const word of PRECOMPUTED_EMOTIONAL_LOWER) {
+    score += countOccurrences(lowerText, word) * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
@@ -423,9 +457,10 @@ export function detectPartisanMarkers(text: string): { markers: string[]; score:
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.partisanMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRECOMPUTED_PARTISAN_LOWER.length; i++) {
+    if (lowerText.includes(PRECOMPUTED_PARTISAN_LOWER[i])) {
+      // Preserve original casing
+      markers.push(EMOTIONAL_LEXICON.partisanMarkers[i]);
     }
   }
   
@@ -442,9 +477,10 @@ export function detectAuthoritarianMarkers(text: string): { markers: string[]; s
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.authoritarianMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRECOMPUTED_AUTHORITARIAN_LOWER.length; i++) {
+    if (lowerText.includes(PRECOMPUTED_AUTHORITARIAN_LOWER[i])) {
+      // Preserve original casing
+      markers.push(EMOTIONAL_LEXICON.authoritarianMarkers[i]);
     }
   }
   
@@ -461,9 +497,10 @@ export function detectSocialistMarkers(text: string): { markers: string[]; score
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.socialistMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < PRECOMPUTED_SOCIALIST_LOWER.length; i++) {
+    if (lowerText.includes(PRECOMPUTED_SOCIALIST_LOWER[i])) {
+      // Preserve original casing
+      markers.push(EMOTIONAL_LEXICON.socialistMarkers[i]);
     }
   }
   
@@ -481,13 +518,13 @@ export function extractSources(text: string): { types: string[]; count: number; 
   const types: string[] = [];
   const details: string[] = [];
   
-  for (const [type, indicators] of Object.entries(SOURCE_TYPE_INDICATORS)) {
-    for (const indicator of indicators) {
-      if (lowerText.includes(indicator)) {
+  for (const { type, indicators, originalIndicators } of PRECOMPUTED_SOURCES_LOWER) {
+    for (let i = 0; i < indicators.length; i++) {
+      if (lowerText.includes(indicators[i])) {
         if (!types.includes(type)) {
           types.push(type);
         }
-        details.push(indicator);
+        details.push(originalIndicators[i]);
       }
     }
   }
