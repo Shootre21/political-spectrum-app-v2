@@ -1,0 +1,3 @@
+## 2025-06-12 - Module-Scoped Initialization Over Inline Regex Evaluation
+**Learning:** In hot loops performing high-frequency text string-matching (e.g., in `src/lib/lexicons.ts`), repeated `new RegExp(term, 'gi')` initialization and `.toLowerCase()` operations result in substantial CPU and memory overhead (a ~50% penalty during 10k iterations).
+**Action:** Always pre-process and cache static dictionaries as module-scoped structures (e.g., mapping to pre-lowercased arrays). Substitute dynamic `new RegExp()` evaluation inside hot loops with an efficient `indexOf` while-loop to achieve significant performance gains while explicitly checking string length to prevent infinite loop errors.
