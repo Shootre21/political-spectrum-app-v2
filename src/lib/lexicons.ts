@@ -347,6 +347,45 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// --- PRE-COMPUTED CACHES FOR OPTIMIZATION ---
+
+const LOWER_TOPIC_LEXICONS: Record<string, { leftTerms: string[], rightTerms: string[], allTerms: string[] }> = {};
+for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
+  LOWER_TOPIC_LEXICONS[topic] = {
+    leftTerms: lexicon.leftTerms.map(t => t.toLowerCase()),
+    rightTerms: lexicon.rightTerms.map(t => t.toLowerCase()),
+    allTerms: [...lexicon.leftTerms, ...lexicon.rightTerms].map(t => t.toLowerCase())
+  };
+}
+
+const LOWER_EMOTIONAL_LEXICON = {
+  highEmotion: EMOTIONAL_LEXICON.highEmotion.map(w => w.toLowerCase()),
+  partisanMarkers: EMOTIONAL_LEXICON.partisanMarkers.map(w => w.toLowerCase()),
+  authoritarianMarkers: EMOTIONAL_LEXICON.authoritarianMarkers.map(w => w.toLowerCase()),
+  socialistMarkers: EMOTIONAL_LEXICON.socialistMarkers.map(w => w.toLowerCase()),
+};
+
+const LOWER_SOURCE_TYPE_INDICATORS: Record<string, string[]> = {};
+for (const [type, indicators] of Object.entries(SOURCE_TYPE_INDICATORS)) {
+  LOWER_SOURCE_TYPE_INDICATORS[type] = indicators.map(i => i.toLowerCase());
+}
+
+/**
+ * Helper to count occurrences of a string without regex allocation overhead
+ */
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while (true) {
+    pos = text.indexOf(term, pos);
+    if (pos === -1) break;
+    count++;
+    pos += term.length;
+  }
+  return count;
+}
+
 /**
  * Detect topic from text
  */
@@ -354,11 +393,12 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (const [topic, lexicon] of Object.entries(LOWER_TOPIC_LEXICONS)) {
+    for (const term of lexicon.allTerms) {
+      if (lowerText.includes(term)) {
+        topics.push(topic);
+        break; // Stop checking terms once the topic is matched
+      }
     }
   }
   
@@ -369,7 +409,7 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
+  const lexicon = LOWER_TOPIC_LEXICONS[topic];
   if (!lexicon) return 0;
   
   const lowerText = text.toLowerCase();
@@ -377,21 +417,15 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+  const leftLen = lexicon.leftTerms.length;
+  for (let i = 0; i < leftLen; i++) {
+    score -= countOccurrences(lowerText, lexicon.leftTerms[i]) * 0.5;
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+  const rightLen = lexicon.rightTerms.length;
+  for (let i = 0; i < rightLen; i++) {
+    score += countOccurrences(lowerText, lexicon.rightTerms[i]) * 0.5;
   }
   
   return score;
@@ -405,12 +439,9 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
-    }
+  const emotionWordsLen = LOWER_EMOTIONAL_LEXICON.highEmotion.length;
+  for (let i = 0; i < emotionWordsLen; i++) {
+    score += countOccurrences(lowerText, LOWER_EMOTIONAL_LEXICON.highEmotion[i]) * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
@@ -423,9 +454,12 @@ export function detectPartisanMarkers(text: string): { markers: string[]; score:
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.partisanMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  const lowerMarkers = LOWER_EMOTIONAL_LEXICON.partisanMarkers;
+  const originalMarkers = EMOTIONAL_LEXICON.partisanMarkers;
+
+  for (let i = 0; i < lowerMarkers.length; i++) {
+    if (lowerText.includes(lowerMarkers[i])) {
+      markers.push(originalMarkers[i]);
     }
   }
   
@@ -442,9 +476,12 @@ export function detectAuthoritarianMarkers(text: string): { markers: string[]; s
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.authoritarianMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  const lowerMarkers = LOWER_EMOTIONAL_LEXICON.authoritarianMarkers;
+  const originalMarkers = EMOTIONAL_LEXICON.authoritarianMarkers;
+
+  for (let i = 0; i < lowerMarkers.length; i++) {
+    if (lowerText.includes(lowerMarkers[i])) {
+      markers.push(originalMarkers[i]);
     }
   }
   
@@ -461,9 +498,12 @@ export function detectSocialistMarkers(text: string): { markers: string[]; score
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.socialistMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  const lowerMarkers = LOWER_EMOTIONAL_LEXICON.socialistMarkers;
+  const originalMarkers = EMOTIONAL_LEXICON.socialistMarkers;
+
+  for (let i = 0; i < lowerMarkers.length; i++) {
+    if (lowerText.includes(lowerMarkers[i])) {
+      markers.push(originalMarkers[i]);
     }
   }
   
@@ -481,13 +521,17 @@ export function extractSources(text: string): { types: string[]; count: number; 
   const types: string[] = [];
   const details: string[] = [];
   
-  for (const [type, indicators] of Object.entries(SOURCE_TYPE_INDICATORS)) {
-    for (const indicator of indicators) {
-      if (lowerText.includes(indicator)) {
-        if (!types.includes(type)) {
+  for (const [type, indicators] of Object.entries(LOWER_SOURCE_TYPE_INDICATORS)) {
+    let typeAdded = false;
+    const originalIndicators = SOURCE_TYPE_INDICATORS[type as keyof typeof SOURCE_TYPE_INDICATORS];
+
+    for (let i = 0; i < indicators.length; i++) {
+      if (lowerText.includes(indicators[i])) {
+        if (!typeAdded && !types.includes(type)) {
           types.push(type);
+          typeAdded = true;
         }
-        details.push(indicator);
+        details.push(originalIndicators[i]);
       }
     }
   }
