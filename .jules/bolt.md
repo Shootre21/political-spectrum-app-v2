@@ -1,0 +1,3 @@
+## 2025-02-24 - Precomputing Static Regex Data
+**Learning:** Instantiating `new RegExp(term, 'gi')` inside text analysis loops creates massive CPU and memory overhead, especially when parsing thousands of documents. Furthermore, doing repeated `.toLowerCase()` operations on the same static terms adds invisible, constant string allocation costs.
+**Action:** Always precompute lowercased arrays at the module scope level. Then, for hot path loops, replace `new RegExp` with a custom indexOf while-loop (which is an order of magnitude faster in V8) and use pre-lowercased terms while mapping indexes back to the original arrays if output casing needs to be preserved.

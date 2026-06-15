@@ -347,6 +347,57 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// --- PERFORMANCE OPTIMIZATIONS ---
+// Pre-lower case the arrays at module scope to avoid string conversions during hot loops.
+// This significantly reduces memory allocations and CPU overhead during text analysis.
+
+const PRECOMPUTED_TOPICS = Object.fromEntries(
+  Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => [
+    topic,
+    {
+      leftTerms: lexicon.leftTerms.map(t => t.toLowerCase()),
+      rightTerms: lexicon.rightTerms.map(t => t.toLowerCase()),
+      allTerms: [...lexicon.leftTerms, ...lexicon.rightTerms].map(t => t.toLowerCase())
+    }
+  ])
+);
+
+const PRECOMPUTED_EMOTIONS = {
+  highEmotion: EMOTIONAL_LEXICON.highEmotion.map(w => w.toLowerCase()),
+  partisanMarkers: EMOTIONAL_LEXICON.partisanMarkers.map(w => w.toLowerCase()),
+  authoritarianMarkers: EMOTIONAL_LEXICON.authoritarianMarkers.map(w => w.toLowerCase()),
+  socialistMarkers: EMOTIONAL_LEXICON.socialistMarkers.map(w => w.toLowerCase()),
+};
+
+const PRECOMPUTED_SOURCES = Object.fromEntries(
+  Object.entries(SOURCE_TYPE_INDICATORS).map(([type, indicators]) => [
+    type,
+    indicators.map(i => i.toLowerCase())
+  ])
+);
+
+// Pre-extract entries for faster iteration
+const PRECOMPUTED_TOPICS_ENTRIES = Object.entries(PRECOMPUTED_TOPICS);
+const PRECOMPUTED_SOURCES_ENTRIES = Object.entries(PRECOMPUTED_SOURCES);
+
+/**
+ * Fast occurrence counting using indexOf loops instead of regex.
+ * Avoids the overhead of regular expression compilation and matching in hot paths.
+ */
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while (true) {
+    pos = text.indexOf(term, pos);
+    if (pos === -1) break;
+    count++;
+    pos += term.length;
+  }
+  return count;
+}
+// ---------------------------------
+
 /**
  * Detect topic from text
  */
@@ -354,11 +405,15 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  // Use precomputed lowercased arrays and indexOf for fast matching
+  for (let i = 0; i < PRECOMPUTED_TOPICS_ENTRIES.length; i++) {
+    const topic = PRECOMPUTED_TOPICS_ENTRIES[i][0];
+    const terms = PRECOMPUTED_TOPICS_ENTRIES[i][1].allTerms;
+    for (let j = 0; j < terms.length; j++) {
+      if (lowerText.indexOf(terms[j]) !== -1) {
+        topics.push(topic);
+        break; // Match found, no need to check other terms for this topic
+      }
     }
   }
   
@@ -369,29 +424,21 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
+  const lexicon = PRECOMPUTED_TOPICS[topic];
   if (!lexicon) return 0;
   
   const lowerText = text.toLowerCase();
-  
   let score = 0;
   
-  // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+  // Use custom fast indexOf loop instead of inline new RegExp(term, 'gi')
+  const leftTerms = lexicon.leftTerms;
+  for (let i = 0; i < leftTerms.length; i++) {
+    score -= countOccurrences(lowerText, leftTerms[i]) * 0.5;
   }
   
-  // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+  const rightTerms = lexicon.rightTerms;
+  for (let i = 0; i < rightTerms.length; i++) {
+    score += countOccurrences(lowerText, rightTerms[i]) * 0.5;
   }
   
   return score;
@@ -404,13 +451,10 @@ export function calculateEmotionalScore(text: string): number {
   const lowerText = text.toLowerCase();
   let score = 0;
   
-  // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
-    }
+  // Use custom fast indexOf loop instead of inline RegExp
+  const terms = PRECOMPUTED_EMOTIONS.highEmotion;
+  for (let i = 0; i < terms.length; i++) {
+    score += countOccurrences(lowerText, terms[i]) * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
@@ -423,9 +467,13 @@ export function detectPartisanMarkers(text: string): { markers: string[]; score:
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.partisanMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  const terms = PRECOMPUTED_EMOTIONS.partisanMarkers;
+  const original = EMOTIONAL_LEXICON.partisanMarkers;
+
+  // Use indexOf on pre-lowercased terms, preserving original application output casing
+  for (let i = 0; i < terms.length; i++) {
+    if (lowerText.indexOf(terms[i]) !== -1) {
+      markers.push(original[i]);
     }
   }
   
@@ -442,9 +490,13 @@ export function detectAuthoritarianMarkers(text: string): { markers: string[]; s
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.authoritarianMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  const terms = PRECOMPUTED_EMOTIONS.authoritarianMarkers;
+  const original = EMOTIONAL_LEXICON.authoritarianMarkers;
+
+  // Use indexOf on pre-lowercased terms, preserving original application output casing
+  for (let i = 0; i < terms.length; i++) {
+    if (lowerText.indexOf(terms[i]) !== -1) {
+      markers.push(original[i]);
     }
   }
   
@@ -461,9 +513,13 @@ export function detectSocialistMarkers(text: string): { markers: string[]; score
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.socialistMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  const terms = PRECOMPUTED_EMOTIONS.socialistMarkers;
+  const original = EMOTIONAL_LEXICON.socialistMarkers;
+
+  // Use indexOf on pre-lowercased terms, preserving original application output casing
+  for (let i = 0; i < terms.length; i++) {
+    if (lowerText.indexOf(terms[i]) !== -1) {
+      markers.push(original[i]);
     }
   }
   
@@ -481,13 +537,20 @@ export function extractSources(text: string): { types: string[]; count: number; 
   const types: string[] = [];
   const details: string[] = [];
   
-  for (const [type, indicators] of Object.entries(SOURCE_TYPE_INDICATORS)) {
-    for (const indicator of indicators) {
-      if (lowerText.includes(indicator)) {
-        if (!types.includes(type)) {
+  // Use precomputed lowercased arrays and indexOf
+  for (let j = 0; j < PRECOMPUTED_SOURCES_ENTRIES.length; j++) {
+    const type = PRECOMPUTED_SOURCES_ENTRIES[j][0];
+    const indicators = PRECOMPUTED_SOURCES_ENTRIES[j][1];
+    const original = SOURCE_TYPE_INDICATORS[type as keyof typeof SOURCE_TYPE_INDICATORS];
+
+    let typeAdded = false;
+    for (let i = 0; i < indicators.length; i++) {
+      if (lowerText.indexOf(indicators[i]) !== -1) {
+        if (!typeAdded) {
           types.push(type);
+          typeAdded = true;
         }
-        details.push(indicator);
+        details.push(original[i]); // preserve original case
       }
     }
   }
