@@ -86,66 +86,73 @@ export async function getAnalyticsOverview(): Promise<AnalyticsOverview> {
   }
 
   try {
-    // Get all analyzed articles
-    const articles = await db.article.findMany({
-      where: {
-        leftWingSummary: { not: null },
-      },
-      select: {
-        id: true,
-        source: true,
-        spectrumScore: true,
-        category: true,
-        createdAt: true,
-      },
-    });
+    // Perform database aggregations concurrently to avoid O(N) memory consumption
+    const [
+      totalArticles,
+      analyzedArticles,
+      avgBiasAgg,
+      sourceGroups,
+      topicGroups,
+      leftCount,
+      centerCount,
+      rightCount,
+      recentTrends,
+    ] = await Promise.all([
+      db.article.count(),
+      db.article.count({ where: { leftWingSummary: { not: null } } }),
+      db.article.aggregate({
+        where: { leftWingSummary: { not: null } },
+        _avg: { spectrumScore: true },
+      }),
+      db.article.groupBy({
+        by: ['source'],
+        where: { leftWingSummary: { not: null } },
+        _count: { _all: true },
+        _avg: { spectrumScore: true },
+      }),
+      db.article.groupBy({
+        by: ['category'],
+        where: { leftWingSummary: { not: null }, category: { not: null } },
+        _count: { _all: true },
+      }),
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: { lt: -1 } } }),
+      db.article.count({
+        where: {
+          leftWingSummary: { not: null },
+          OR: [
+            { spectrumScore: { gte: -1, lte: 1 } },
+            { spectrumScore: null }
+          ]
+        }
+      }),
+      db.article.count({ where: { leftWingSummary: { not: null }, spectrumScore: { gt: 1 } } }),
+      getRecentTrends(),
+    ]);
 
-    const totalArticles = await db.article.count();
-    const analyzedArticles = articles.length;
+    const avgBiasScore = avgBiasAgg?._avg?.spectrumScore || 0;
 
-    // Calculate average bias
-    const avgBiasScore = articles.reduce((sum, a) => sum + (a.spectrumScore || 0), 0) / (analyzedArticles || 1);
-
-    // Source distribution
-    const sourceCounts = new Map<string, { count: number; bias: number }>();
-    articles.forEach(a => {
-      const existing = sourceCounts.get(a.source) || { count: 0, bias: 0 };
-      sourceCounts.set(a.source, {
-        count: existing.count + 1,
-        bias: existing.bias + (a.spectrumScore || 0),
-      });
-    });
-
-    const topSources = Array.from(sourceCounts.entries())
-      .map(([source, data]) => ({
-        source,
-        count: data.count,
-        avgBias: data.bias / data.count,
+    const topSources = (Array.isArray(sourceGroups) ? sourceGroups : [])
+      .map((g) => ({
+        source: g.source,
+        count: g._count._all,
+        avgBias: g._avg.spectrumScore || 0,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    // Bias distribution
     const biasDistribution = {
-      left: articles.filter(a => (a.spectrumScore || 0) < -1).length,
-      center: articles.filter(a => Math.abs(a.spectrumScore || 0) <= 1).length,
-      right: articles.filter(a => (a.spectrumScore || 0) > 1).length,
+      left: typeof leftCount === 'number' ? leftCount : 0,
+      center: typeof centerCount === 'number' ? centerCount : 0,
+      right: typeof rightCount === 'number' ? rightCount : 0,
     };
 
-    // Topic distribution
-    const topicCounts = new Map<string, number>();
-    articles.forEach(a => {
-      if (a.category) {
-        topicCounts.set(a.category, (topicCounts.get(a.category) || 0) + 1);
-      }
-    });
-
-    const topicDistribution = Array.from(topicCounts.entries())
-      .map(([topic, count]) => ({ topic, count }))
+    const topicDistribution = (Array.isArray(topicGroups) ? topicGroups : [])
+      .filter((g) => g.category)
+      .map((g) => ({
+        topic: g.category as string,
+        count: g._count._all,
+      }))
       .sort((a, b) => b.count - a.count);
-
-    // Recent trends (last 7 days)
-    const recentTrends = await getRecentTrends();
 
     return {
       totalArticles,
