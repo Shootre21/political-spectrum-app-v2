@@ -1,0 +1,3 @@
+## 2024-05-19 - Fast Dictionary Matching in Hot Loops
+**Learning:** In Node.js/Bun, repeatedly calling `text.toLowerCase()` and generating `new RegExp(term, 'gi')` inside deeply nested loops for large dictionaries (lexicons) is a major performance bottleneck for text analysis engines. Replacing regex instantiation with pre-lowercased, module-scoped arrays combined with an optimized custom `indexOf` while-loop implementation avoids V8 garbage collection overhead and repetitive text transformations, reducing analysis duration significantly.
+**Action:** Always precompute/pre-lowercase static dictionary arrays at module scope. Prefer standard `for`-loops combined with `indexOf` over `filter`, `match`, or inline Regex instantiations for heavy text processing in hot loops.
