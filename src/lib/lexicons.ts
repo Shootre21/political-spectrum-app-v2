@@ -355,9 +355,25 @@ export function detectTopic(text: string): string[] {
   const lowerText = text.toLowerCase();
   
   for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
+    let found = false;
+    // Check left terms
+    for (const term of lexicon.leftTerms) {
+      if (lowerText.includes(term.toLowerCase())) {
+        found = true;
+        break;
+      }
+    }
+    // Check right terms if not found yet
+    if (!found) {
+      for (const term of lexicon.rightTerms) {
+        if (lowerText.includes(term.toLowerCase())) {
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (found) {
       topics.push(topic);
     }
   }
@@ -378,19 +394,23 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   // Count left-framing terms
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    const lowerTerm = term.toLowerCase();
+    if (lowerTerm.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      score -= 0.5;
+      pos += lowerTerm.length;
     }
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    const lowerTerm = term.toLowerCase();
+    if (lowerTerm.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      score += 0.5;
+      pos += lowerTerm.length;
     }
   }
   
@@ -406,10 +426,12 @@ export function calculateEmotionalScore(text: string): number {
   
   // Count high-emotion words
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    const lowerWord = word.toLowerCase();
+    if (lowerWord.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerWord, pos)) !== -1) {
+      score += 2;
+      pos += lowerWord.length;
     }
   }
   

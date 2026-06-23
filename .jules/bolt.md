@@ -1,0 +1,3 @@
+## 2025-02-24 - [String Matching Optimization in Hot Loops]
+**Learning:** Array `.filter()` checks and inline `new RegExp()` instantiations inside loops are extremely costly in V8 due to memory allocations and unnecessary processing, especially for repeated string matching operations across static arrays (like in `src/lib/lexicons.ts`).
+**Action:** Replace `array.filter()` with a standard `for...of` loop and early `break` statements to avoid array allocations and short-circuit early. Replace inline `new RegExp(term, 'gi')` instantiations with an `indexOf` while-loop to count string occurrences without the overhead of regex compilation and execution in hot loops.
