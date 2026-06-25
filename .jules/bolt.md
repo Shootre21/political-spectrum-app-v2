@@ -1,0 +1,3 @@
+## 2025-02-20 - Fast Text Occurrence Counting in Node.js
+**Learning:** In Node.js/Bun, replacing inline `new RegExp(..., 'gi')` instantiations inside hot loops with pre-compiled, lowercased arrays and custom `indexOf()` while-loops (e.g., `let pos = 0; while ((pos = lowerText.indexOf(term, pos)) !== -1)`) yields extremely significant execution speedups for pure string occurrence counting. Combined with moving array allocations (`.map`, `.filter`) to module scope, this drops execution time by over 50%.
+**Action:** When optimizing text analysis functions, avoid `new RegExp()` in loops and array spread/filter operations on static lexicons. Use module-scoped pre-compiled arrays and fast `indexOf()` loops, remembering to check for `length === 0` to prevent infinite loops.
