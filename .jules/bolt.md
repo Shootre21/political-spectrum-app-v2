@@ -1,0 +1,3 @@
+## 2024-05-14 - Fast String Occurrence Counting
+**Learning:** In Node.js/Bun, instantiating `new RegExp()` inside hot loops for simple string counting is extremely slow (often a 2x-4x performance penalty). Additionally, using `String.prototype.match()` inside tight loops creates high garbage collection pressure compared to primitive integer counting.
+**Action:** When implementing text analysis pipelines (like bias or emotional scoring), replace inline `new RegExp(term, 'gi')` with module-scoped pre-lowercased term arrays, and use a custom `indexOf` based `countOccurrences` while-loop to achieve significant speedups without changing application behavior.
