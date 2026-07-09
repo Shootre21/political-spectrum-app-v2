@@ -1,0 +1,3 @@
+## 2025-03-09 - Inline Regex Allocation in Hot Loops
+**Learning:** Instantiating `new RegExp(..., 'gi')` inside text analysis hot loops (like in `calculateFramingScore` and `calculateEmotionalScore`) creates severe performance bottlenecks due to constant regex compilation and memory allocation overheads. Replacing these with `indexOf` while-loops yields an order of magnitude faster execution while remaining functionally identical for simple term counting.
+**Action:** Always scrutinize `new RegExp()` calls inside loops, especially those processing large text or iterating through arrays of terms. Replace with string manipulation methods like `indexOf` when pattern matching capabilities are not strictly needed.

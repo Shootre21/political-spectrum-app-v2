@@ -376,21 +376,30 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   let score = 0;
   
+  // Optimize: Use indexOf loop instead of inline RegExp for much faster counting
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    const lowerTerm = lexicon.leftTerms[i].toLowerCase();
+    if (lowerTerm.length === 0) continue;
+    let pos = 0;
+    while (true) {
+      pos = lowerText.indexOf(lowerTerm, pos);
+      if (pos === -1) break;
+      score -= 0.5;
+      pos += lowerTerm.length;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    const lowerTerm = lexicon.rightTerms[i].toLowerCase();
+    if (lowerTerm.length === 0) continue;
+    let pos = 0;
+    while (true) {
+      pos = lowerText.indexOf(lowerTerm, pos);
+      if (pos === -1) break;
+      score += 0.5;
+      pos += lowerTerm.length;
     }
   }
   
@@ -404,12 +413,17 @@ export function calculateEmotionalScore(text: string): number {
   const lowerText = text.toLowerCase();
   let score = 0;
   
+  // Optimize: Use indexOf loop instead of inline RegExp for much faster counting
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+  for (let i = 0; i < EMOTIONAL_LEXICON.highEmotion.length; i++) {
+    const lowerWord = EMOTIONAL_LEXICON.highEmotion[i].toLowerCase();
+    if (lowerWord.length === 0) continue;
+    let pos = 0;
+    while (true) {
+      pos = lowerText.indexOf(lowerWord, pos);
+      if (pos === -1) break;
+      score += 2;
+      pos += lowerWord.length;
     }
   }
   
