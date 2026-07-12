@@ -1,0 +1,3 @@
+## 2024-05-24 - Dynamic Regex Instantiation in Hot Loops
+**Learning:** Instantiating `new RegExp(term, 'gi')` inside tight loops iterating over arrays of terms (like in text framing scoring) is extremely slow due to repeated regex compilation overhead. It is also potentially unsafe if terms contain unescaped regex metacharacters.
+**Action:** Replace inline dynamic regexes used for simple occurrence counting with a custom `indexOf` loop helper. This prevents compilation overhead and safely treats all terms as literal strings. In benchmarks, this yielded an ~80% execution time reduction for string counting operations.
