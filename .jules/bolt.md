@@ -1,0 +1,3 @@
+## 2024-05-18 - Replacing RegExp allocations inside hot loops with indexOf
+**Learning:** In Node/Bun, allocating `new RegExp(term, 'gi')` inside a loop iterating over terms is incredibly slow (often 3x slower) compared to a custom `indexOf` based `while` loop that counts occurrences, due to the overhead of string conversion and RegExp object creation in memory.
+**Action:** When counting occurrences of known literal strings inside hot text processing loops (like `calculateFramingScore` and `calculateEmotionalScore`), implement a `countOccurrences` helper leveraging `indexOf` rather than relying on inline `new RegExp`. Ensure the term length is checked for `=== 0` first to avoid infinite loops.
