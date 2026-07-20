@@ -377,20 +377,26 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
+  // Performance optimization: Using indexOf instead of dynamic RegExp to improve matching speed and reduce GC overhead
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    const search = term.toLowerCase();
+    if (search.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(search, pos)) !== -1) {
+      score -= 0.5;
+      pos += search.length;
     }
   }
   
   // Count right-framing terms
+  // Performance optimization: Using indexOf instead of dynamic RegExp to improve matching speed and reduce GC overhead
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    const search = term.toLowerCase();
+    if (search.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(search, pos)) !== -1) {
+      score += 0.5;
+      pos += search.length;
     }
   }
   
@@ -405,12 +411,17 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
+  // Performance optimization: Using indexOf instead of dynamic RegExp to improve matching speed and reduce GC overhead
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    const search = word.toLowerCase();
+    if (search.length === 0) continue;
+    let count = 0;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(search, pos)) !== -1) {
+      count++;
+      pos += search.length;
     }
+    score += count * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
