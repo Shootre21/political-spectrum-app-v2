@@ -347,6 +347,37 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+export const TOPIC_LEXICONS_LOWER: Record<string, { leftTerms: string[]; rightTerms: string[]; allTerms: string[] }> = {};
+for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
+  const leftTerms = lexicon.leftTerms.map(t => t.toLowerCase());
+  const rightTerms = lexicon.rightTerms.map(t => t.toLowerCase());
+  TOPIC_LEXICONS_LOWER[topic] = {
+    leftTerms,
+    rightTerms,
+    allTerms: [...leftTerms, ...rightTerms],
+  };
+}
+
+export const EMOTIONAL_LEXICON_LOWER = {
+  highEmotion: EMOTIONAL_LEXICON.highEmotion.map(t => t.toLowerCase()),
+  partisanMarkers: EMOTIONAL_LEXICON.partisanMarkers.map(t => t.toLowerCase()),
+  authoritarianMarkers: EMOTIONAL_LEXICON.authoritarianMarkers.map(t => t.toLowerCase()),
+  socialistMarkers: EMOTIONAL_LEXICON.socialistMarkers.map(t => t.toLowerCase()),
+};
+
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while (true) {
+    pos = text.indexOf(term, pos);
+    if (pos === -1) break;
+    count++;
+    pos += term.length;
+  }
+  return count;
+}
+
 /**
  * Detect topic from text
  */
@@ -354,11 +385,12 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS_LOWER)) {
+    for (const term of lexicon.allTerms) {
+      if (lowerText.includes(term)) {
+        topics.push(topic);
+        break;
+      }
     }
   }
   
@@ -369,29 +401,21 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const lexiconLower = TOPIC_LEXICONS_LOWER[topic];
+  if (!lexiconLower) return 0;
   
   const lowerText = text.toLowerCase();
   
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+  for (const term of lexiconLower.leftTerms) {
+    score -= countOccurrences(lowerText, term) * 0.5;
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+  for (const term of lexiconLower.rightTerms) {
+    score += countOccurrences(lowerText, term) * 0.5;
   }
   
   return score;
@@ -405,12 +429,8 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
-    }
+  for (const word of EMOTIONAL_LEXICON_LOWER.highEmotion) {
+    score += countOccurrences(lowerText, word) * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
@@ -423,9 +443,9 @@ export function detectPartisanMarkers(text: string): { markers: string[]; score:
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.partisanMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < EMOTIONAL_LEXICON_LOWER.partisanMarkers.length; i++) {
+    if (lowerText.includes(EMOTIONAL_LEXICON_LOWER.partisanMarkers[i])) {
+      markers.push(EMOTIONAL_LEXICON.partisanMarkers[i]);
     }
   }
   
@@ -442,9 +462,9 @@ export function detectAuthoritarianMarkers(text: string): { markers: string[]; s
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.authoritarianMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < EMOTIONAL_LEXICON_LOWER.authoritarianMarkers.length; i++) {
+    if (lowerText.includes(EMOTIONAL_LEXICON_LOWER.authoritarianMarkers[i])) {
+      markers.push(EMOTIONAL_LEXICON.authoritarianMarkers[i]);
     }
   }
   
@@ -461,9 +481,9 @@ export function detectSocialistMarkers(text: string): { markers: string[]; score
   const lowerText = text.toLowerCase();
   const markers: string[] = [];
   
-  for (const marker of EMOTIONAL_LEXICON.socialistMarkers) {
-    if (lowerText.includes(marker.toLowerCase())) {
-      markers.push(marker);
+  for (let i = 0; i < EMOTIONAL_LEXICON_LOWER.socialistMarkers.length; i++) {
+    if (lowerText.includes(EMOTIONAL_LEXICON_LOWER.socialistMarkers[i])) {
+      markers.push(EMOTIONAL_LEXICON.socialistMarkers[i]);
     }
   }
   
