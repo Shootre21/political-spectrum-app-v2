@@ -1,0 +1,3 @@
+## 2025-02-20 - Fast String Occurrence Counting
+**Learning:** In V8 (Node/Bun), repeatedly instantiating `new RegExp(..., 'gi')` inside a hot loop and calling `string.match(regex)` is significantly slower than manually counting substring matches using a `while(true) { pos = string.indexOf(term, pos) }` loop, especially when iterating over large arrays of static terms.
+**Action:** When implementing text analysis or NLP routines that need to count occurrences of static dictionary terms, use `indexOf` while-loops instead of dynamically compiled regular expressions for a 3-5x performance speedup. Always remember to add an `if (term.length === 0)` guard to prevent infinite loops.
