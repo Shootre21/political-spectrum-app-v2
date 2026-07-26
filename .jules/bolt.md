@@ -1,0 +1,3 @@
+## 2026-07-26 - Replace inline RegExp with indexOf in hot loops
+**Learning:** In Node.js/Bun, creating `new RegExp(term, 'gi')` inside a hot loop (like scanning multiple strings against a large lexicon) is highly inefficient due to Regex compilation overhead and the memory allocations of `String.prototype.match()`. A custom `indexOf` while-loop is significantly faster for counting exact substring occurrences, avoiding both overheads.
+**Action:** When performing substring counting or matching against static arrays of terms in hot paths, prefer `indexOf` loops over dynamically generated Regex objects, provided you don't need complex pattern matching features.
