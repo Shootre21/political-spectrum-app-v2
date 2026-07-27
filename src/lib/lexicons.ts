@@ -347,6 +347,39 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Pre-lowercased cache for fast topic and emotional detection
+const TOPIC_LEXICONS_LOWER = Object.fromEntries(
+  Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => [
+    topic,
+    {
+      leftTerms: lexicon.leftTerms.map(term => term.toLowerCase()),
+      rightTerms: lexicon.rightTerms.map(term => term.toLowerCase()),
+      allTerms: [...lexicon.leftTerms, ...lexicon.rightTerms].map(term => term.toLowerCase())
+    }
+  ])
+) as Record<string, { leftTerms: string[]; rightTerms: string[]; allTerms: string[] }>;
+
+const EMOTIONAL_LEXICON_LOWER = {
+  highEmotion: EMOTIONAL_LEXICON.highEmotion.map(term => term.toLowerCase()),
+  partisanMarkers: EMOTIONAL_LEXICON.partisanMarkers.map(term => term.toLowerCase()),
+  authoritarianMarkers: EMOTIONAL_LEXICON.authoritarianMarkers.map(term => term.toLowerCase()),
+  socialistMarkers: EMOTIONAL_LEXICON.socialistMarkers.map(term => term.toLowerCase()),
+};
+
+/**
+ * Optimized helper to count non-overlapping substring occurrences
+ */
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while ((pos = text.indexOf(term, pos)) !== -1) {
+    count++;
+    pos += term.length;
+  }
+  return count;
+}
+
 /**
  * Detect topic from text
  */
@@ -354,11 +387,13 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS_LOWER)) {
+    const allTerms = lexicon.allTerms;
+    for (let i = 0; i < allTerms.length; i++) {
+      if (lowerText.includes(allTerms[i])) {
+        topics.push(topic);
+        break;
+      }
     }
   }
   
@@ -369,7 +404,7 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
+  const lexicon = TOPIC_LEXICONS_LOWER[topic];
   if (!lexicon) return 0;
   
   const lowerText = text.toLowerCase();
@@ -377,21 +412,13 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    score -= countOccurrences(lowerText, lexicon.leftTerms[i]) * 0.5;
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    score += countOccurrences(lowerText, lexicon.rightTerms[i]) * 0.5;
   }
   
   return score;
@@ -405,12 +432,8 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
-    }
+  for (let i = 0; i < EMOTIONAL_LEXICON_LOWER.highEmotion.length; i++) {
+    score += countOccurrences(lowerText, EMOTIONAL_LEXICON_LOWER.highEmotion[i]) * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
