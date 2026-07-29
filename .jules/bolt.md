@@ -1,0 +1,3 @@
+## 2024-05-24 - High-Frequency Regex Instantiation Bottleneck in Lexicon Parsing
+**Learning:** In Node.js/Bun, repeatedly calling `new RegExp()` inside a hot loop traversing static arrays (like the `TOPIC_LEXICONS` lists) for substring matching incurs massive JIT compilation overhead, especially when combined with string conversion (`.match()`).
+**Action:** Replace inline runtime regex matching within analysis loops with simple, manual `indexOf()` loops to drastically reduce memory allocation and parsing times. Always wrap custom `indexOf()` loops with length checks (`if (term.length === 0) return 0;`) to avoid infinite looping edge cases.
