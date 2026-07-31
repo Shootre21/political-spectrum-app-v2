@@ -378,19 +378,17 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   // Count left-framing terms
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    const occurrences = countOccurrences(lowerText, term.toLowerCase());
+    if (occurrences > 0) {
+      score -= occurrences * 0.5;
     }
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    const occurrences = countOccurrences(lowerText, term.toLowerCase());
+    if (occurrences > 0) {
+      score += occurrences * 0.5;
     }
   }
   
@@ -406,10 +404,9 @@ export function calculateEmotionalScore(text: string): number {
   
   // Count high-emotion words
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    const occurrences = countOccurrences(lowerText, word.toLowerCase());
+    if (occurrences > 0) {
+      score += occurrences * 2;
     }
   }
   
@@ -497,4 +494,26 @@ export function extractSources(text: string): { types: string[]; count: number; 
     count: details.length,
     details: [...new Set(details)],
   };
+}
+
+/**
+ * Fast string occurrence counter using indexOf instead of regex
+ * This avoids expensive RegExp compilation in hot loops
+ */
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+
+  while (true) {
+    pos = text.indexOf(term, pos);
+    if (pos >= 0) {
+      count++;
+      pos += term.length;
+    } else {
+      break;
+    }
+  }
+
+  return count;
 }
