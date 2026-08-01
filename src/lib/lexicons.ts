@@ -338,6 +338,16 @@ export const EMOTIONAL_LEXICON = {
   ],
 };
 
+// Pre-lowercased lexicons for fast hot-loop text matching
+export const TOPIC_LEXICONS_LOWER: Record<string, { left: string[], right: string[] }> = {};
+for (const [topic, lex] of Object.entries(TOPIC_LEXICONS)) {
+  TOPIC_LEXICONS_LOWER[topic] = {
+    left: lex.leftTerms.map(t => t.toLowerCase()),
+    right: lex.rightTerms.map(t => t.toLowerCase())
+  };
+}
+export const EMOTIONAL_HIGH_LOWER = EMOTIONAL_LEXICON.highEmotion.map(w => w.toLowerCase());
+
 // Source type indicators
 export const SOURCE_TYPE_INDICATORS = {
   expert: ['professor', 'doctor', 'phd', 'researcher', 'scientist', 'analyst', 'expert', 'scholar'],
@@ -369,28 +379,32 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const lowerLexicon = TOPIC_LEXICONS_LOWER[topic];
+  if (!lowerLexicon) return 0;
   
   const lowerText = text.toLowerCase();
   
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  for (let i = 0; i < lowerLexicon.left.length; i++) {
+    const term = lowerLexicon.left[i];
+    if (term.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      score -= 0.5;
+      pos += term.length;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  for (let i = 0; i < lowerLexicon.right.length; i++) {
+    const term = lowerLexicon.right[i];
+    if (term.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      score += 0.5;
+      pos += term.length;
     }
   }
   
@@ -405,11 +419,13 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+  for (let i = 0; i < EMOTIONAL_HIGH_LOWER.length; i++) {
+    const word = EMOTIONAL_HIGH_LOWER[i];
+    if (word.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(word, pos)) !== -1) {
+      score += 2;
+      pos += word.length;
     }
   }
   
