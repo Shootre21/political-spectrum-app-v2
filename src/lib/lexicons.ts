@@ -366,6 +366,26 @@ export function detectTopic(text: string): string[] {
 }
 
 /**
+ * Count non-overlapping occurrences of a term in text.
+ * Both text and term should be lowercased before calling this for case-insensitive matching.
+ */
+function countMatches(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while (true) {
+    pos = text.indexOf(term, pos);
+    if (pos >= 0) {
+      count++;
+      pos += term.length;
+    } else {
+      break;
+    }
+  }
+  return count;
+}
+
+/**
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
@@ -377,21 +397,13 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    score -= countMatches(lowerText, lexicon.leftTerms[i].toLowerCase()) * 0.5;
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    score += countMatches(lowerText, lexicon.rightTerms[i].toLowerCase()) * 0.5;
   }
   
   return score;
@@ -405,12 +417,8 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
-    }
+  for (let i = 0; i < EMOTIONAL_LEXICON.highEmotion.length; i++) {
+    score += countMatches(lowerText, EMOTIONAL_LEXICON.highEmotion[i].toLowerCase()) * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
