@@ -1,0 +1,3 @@
+## 2024-08-06 - Replace RegExp instantiations with pre-lowercased arrays and indexOf
+**Learning:** Instantiating `new RegExp` inside a hot loop (like `calculateFramingScore` iterating over lexicons) causes severe performance degradation due to compilation overhead and object allocation, especially when called frequently during text analysis.
+**Action:** Always pre-lowercase static lexicon arrays at the module scope and replace inline regex instantiations with `String.prototype.indexOf` inside a `while` loop to count non-overlapping occurrences. Remember to add `if (term.length === 0) continue;` to avoid infinite loops when using `indexOf(term, pos + term.length)`.
