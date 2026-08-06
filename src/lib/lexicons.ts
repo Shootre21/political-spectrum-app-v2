@@ -365,11 +365,20 @@ export function detectTopic(text: string): string[] {
   return topics;
 }
 
+// Pre-lowercased lexicons for faster string matching
+const TOPIC_LEXICONS_LOWER: Record<string, { leftTerms: string[]; rightTerms: string[] }> = {};
+for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
+  TOPIC_LEXICONS_LOWER[topic] = {
+    leftTerms: lexicon.leftTerms.map(t => t.toLowerCase()),
+    rightTerms: lexicon.rightTerms.map(t => t.toLowerCase()),
+  };
+}
+
 /**
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
+  const lexicon = TOPIC_LEXICONS_LOWER[topic];
   if (!lexicon) return 0;
   
   const lowerText = text.toLowerCase();
@@ -377,20 +386,26 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    const term = lexicon.leftTerms[i];
+    if (term.length === 0) continue;
+
+    let pos = lowerText.indexOf(term, 0);
+    while (pos !== -1) {
+      score -= 0.5;
+      pos = lowerText.indexOf(term, pos + term.length);
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    const term = lexicon.rightTerms[i];
+    if (term.length === 0) continue;
+
+    let pos = lowerText.indexOf(term, 0);
+    while (pos !== -1) {
+      score += 0.5;
+      pos = lowerText.indexOf(term, pos + term.length);
     }
   }
   
