@@ -338,6 +338,12 @@ export const EMOTIONAL_LEXICON = {
   ],
 };
 
+// Pre-computed lowercased lexicon arrays for performance optimization
+const TOPIC_TERMS_LOWER: Record<string, string[]> = {};
+for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
+  TOPIC_TERMS_LOWER[topic] = [...lexicon.leftTerms, ...lexicon.rightTerms].map(term => term.toLowerCase());
+}
+
 // Source type indicators
 export const SOURCE_TYPE_INDICATORS = {
   expert: ['professor', 'doctor', 'phd', 'researcher', 'scientist', 'analyst', 'expert', 'scholar'],
@@ -354,11 +360,13 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (const topic in TOPIC_TERMS_LOWER) {
+    const terms = TOPIC_TERMS_LOWER[topic];
+    for (let i = 0; i < terms.length; i++) {
+      if (lowerText.includes(terms[i])) {
+        topics.push(topic);
+        break;
+      }
     }
   }
   
