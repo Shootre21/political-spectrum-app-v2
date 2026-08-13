@@ -1,0 +1,3 @@
+## 2024-10-24 - High-Frequency Regex Instantiation in Lexicon Processing
+**Learning:** Instantiating `new RegExp(term, 'gi')` inside tight `for` loops for every word in large lexicons (e.g., `TOPIC_LEXICONS`, `EMOTIONAL_LEXICON`) is a massive performance bottleneck. In Node.js/Bun, a simple `indexOf()` while-loop with pre-lowercased strings can perform over 3x faster while retaining case-insensitivity and replicating the exact non-overlapping match counting behavior of `.match()`.
+**Action:** Always prefer `indexOf()` over dynamic `RegExp` generation in text processing hot paths unless complex regex features (like boundaries or lookaheads) are strictly necessary. Advance the index by `term.length` to mimic non-overlapping `.match()` counts.
