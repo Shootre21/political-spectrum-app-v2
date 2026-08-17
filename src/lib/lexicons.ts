@@ -355,9 +355,26 @@ export function detectTopic(text: string): string[] {
   const lowerText = text.toLowerCase();
   
   for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
+    let found = false;
+    // Check left terms
+    for (let i = 0; i < lexicon.leftTerms.length; i++) {
+      if (lowerText.includes(lexicon.leftTerms[i].toLowerCase())) {
+        found = true;
+        break;
+      }
+    }
+
+    // Check right terms if not found
+    if (!found) {
+      for (let i = 0; i < lexicon.rightTerms.length; i++) {
+        if (lowerText.includes(lexicon.rightTerms[i].toLowerCase())) {
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (found) {
       topics.push(topic);
     }
   }
@@ -377,20 +394,24 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    const term = lexicon.leftTerms[i].toLowerCase();
+    if (term.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      score -= 0.5;
+      pos += term.length;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    const term = lexicon.rightTerms[i].toLowerCase();
+    if (term.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      score += 0.5;
+      pos += term.length;
     }
   }
   
