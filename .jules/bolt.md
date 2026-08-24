@@ -1,0 +1,3 @@
+## 2025-02-28 - Optimizing String Matching Across Lexicons
+**Learning:** In Node.js/Bun, repeatedly creating `new RegExp()` in hot loops and using `.match()` is significantly slower than performing `indexOf` over a pre-lowercased cache for text analysis operations. JIT can sometimes make simple inline regexes look fast in microbenchmarks, but for large arrays of terms, `indexOf` dominates.
+**Action:** Always pre-compute and store lowercased terms at the module level when performing case-insensitive substring checks against static sets of words. Replace `match()` with a custom `indexOf` loop counting occurrences.
