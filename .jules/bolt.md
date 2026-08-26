@@ -1,0 +1,3 @@
+## 2025-02-27 - Fast String Occurrences Without Dynamic RegExp
+**Learning:** In Node.js/Bun, dynamically instantiating `new RegExp(term, 'gi')` inside tight iterations over static string arrays (like lexicons) creates a severe performance bottleneck due to regex compilation overhead.
+**Action:** Replace inline dynamic regexes with a custom `indexOf` while-loop that increments by `term.length`. This perfectly mirrors global regex match behavior (non-overlapping counts) while avoiding compilation costs. Always check for `term.length === 0` to prevent infinite loops, and ensure variables are properly cast to lower case if replicating case-insensitivity (`/i`).
