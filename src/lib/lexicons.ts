@@ -377,20 +377,34 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
+  // Optimization: use indexOf instead of dynamic new RegExp() in hot loops
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    if (term.length === 0) continue;
+    const searchTerm = term.toLowerCase();
+    let count = 0;
+    let pos = lowerText.indexOf(searchTerm);
+    while (pos !== -1) {
+      count++;
+      pos = lowerText.indexOf(searchTerm, pos + searchTerm.length);
+    }
+    if (count > 0) {
+      score -= count * 0.5;
     }
   }
   
   // Count right-framing terms
+  // Optimization: use indexOf instead of dynamic new RegExp() in hot loops
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    if (term.length === 0) continue;
+    const searchTerm = term.toLowerCase();
+    let count = 0;
+    let pos = lowerText.indexOf(searchTerm);
+    while (pos !== -1) {
+      count++;
+      pos = lowerText.indexOf(searchTerm, pos + searchTerm.length);
+    }
+    if (count > 0) {
+      score += count * 0.5;
     }
   }
   
@@ -405,11 +419,18 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
+  // Optimization: use indexOf instead of dynamic new RegExp() in hot loops
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    if (word.length === 0) continue;
+    const searchWord = word.toLowerCase();
+    let count = 0;
+    let pos = lowerText.indexOf(searchWord);
+    while (pos !== -1) {
+      count++;
+      pos = lowerText.indexOf(searchWord, pos + searchWord.length);
+    }
+    if (count > 0) {
+      score += count * 2;
     }
   }
   
