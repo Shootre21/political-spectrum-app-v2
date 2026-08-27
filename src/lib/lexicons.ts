@@ -366,6 +366,26 @@ export function detectTopic(text: string): string[] {
 }
 
 /**
+ * Fast occurrence counting using indexOf instead of RegExp matches
+ * @param lowerText Pre-lowercased text to search within
+ * @param term Search term
+ */
+function countOccurrences(lowerText: string, term: string): number {
+  term = term.toLowerCase();
+  if (term.length === 0) return 0;
+
+  let count = 0;
+  let pos = 0;
+
+  while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+    count++;
+    pos += term.length;
+  }
+
+  return count;
+}
+
+/**
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
@@ -378,19 +398,17 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   // Count left-framing terms
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    const count = countOccurrences(lowerText, term);
+    if (count > 0) {
+      score -= count * 0.5;
     }
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    const count = countOccurrences(lowerText, term);
+    if (count > 0) {
+      score += count * 0.5;
     }
   }
   
@@ -406,10 +424,9 @@ export function calculateEmotionalScore(text: string): number {
   
   // Count high-emotion words
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    const count = countOccurrences(lowerText, word);
+    if (count > 0) {
+      score += count * 2;
     }
   }
   
