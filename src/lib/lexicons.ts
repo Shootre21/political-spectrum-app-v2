@@ -348,6 +348,20 @@ export const SOURCE_TYPE_INDICATORS = {
 };
 
 /**
+ * Helper to count occurrences of a term in text quickly without dynamic regex
+ */
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while ((pos = text.indexOf(term, pos)) !== -1) {
+    count++;
+    pos += term.length; // advance by term length to mirror non-overlapping regex matches
+  }
+  return count;
+}
+
+/**
  * Detect topic from text
  */
 export function detectTopic(text: string): string[] {
@@ -377,21 +391,13 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    score -= countOccurrences(lowerText, lexicon.leftTerms[i].toLowerCase()) * 0.5;
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    score += countOccurrences(lowerText, lexicon.rightTerms[i].toLowerCase()) * 0.5;
   }
   
   return score;
@@ -405,12 +411,8 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
-    }
+  for (let i = 0; i < EMOTIONAL_LEXICON.highEmotion.length; i++) {
+    score += countOccurrences(lowerText, EMOTIONAL_LEXICON.highEmotion[i].toLowerCase()) * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
