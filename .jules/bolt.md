@@ -1,0 +1,3 @@
+## 2024-08-30 - High-frequency Regex Replacement
+**Learning:** In Node.js/Bun, repeatedly creating `new RegExp()` inside hot loops (like text analysis mapping over dictionaries) is significantly slower than using module-scoped lowercased arrays and `indexOf()` while-loops. Our microbenchmark showed an improvement from ~266ms down to ~108ms by avoiding regex instantiation for framing scores.
+**Action:** Always pre-compute and module-scope `.toLowerCase()` variants of static dictionary arrays. Use `indexOf()` while-loops to count occurrences of static strings rather than `new RegExp(term, 'gi')`, ensuring you advance the index by `term.length` to mimic non-overlapping regex behavior.
