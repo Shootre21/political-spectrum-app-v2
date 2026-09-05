@@ -376,21 +376,26 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   let score = 0;
   
+  // Bolt optimization: Replace RegExp instantiation inside loops with fast indexOf for string matching
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    const termLower = lexicon.leftTerms[i].toLowerCase();
+    if (termLower.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(termLower, pos)) !== -1) {
+      score -= 0.5;
+      pos += termLower.length;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    const termLower = lexicon.rightTerms[i].toLowerCase();
+    if (termLower.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(termLower, pos)) !== -1) {
+      score += 0.5;
+      pos += termLower.length;
     }
   }
   
@@ -404,12 +409,15 @@ export function calculateEmotionalScore(text: string): number {
   const lowerText = text.toLowerCase();
   let score = 0;
   
+  // Bolt optimization: Replace RegExp instantiation inside loop with fast indexOf for string matching
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+  for (let i = 0; i < EMOTIONAL_LEXICON.highEmotion.length; i++) {
+    const wordLower = EMOTIONAL_LEXICON.highEmotion[i].toLowerCase();
+    if (wordLower.length === 0) continue;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(wordLower, pos)) !== -1) {
+      score += 2;
+      pos += wordLower.length;
     }
   }
   
