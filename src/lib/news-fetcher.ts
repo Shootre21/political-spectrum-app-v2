@@ -205,47 +205,57 @@ export async function fetchHeadlinesFromRSS(): Promise<FetchedHeadlines> {
  * Store articles in database (ALWAYS happens regardless of AI)
  */
 export async function storeArticlesInDatabase(articles: RawArticle[]): Promise<number> {
-  let stored = 0;
+  if (!articles || articles.length === 0) return 0;
   
-  for (const article of articles) {
-    try {
-      // Check if article already exists
-      const existing = await db.article.findFirst({
-        where: {
-          url: article.url,
-        },
-      });
-      
-      if (existing) {
-        continue; // Skip duplicates
-      }
-      
-      // Get outlet bias for initial categorization
+  // Deduplicate incoming articles by URL to prevent intra-batch unique constraint violations
+  const uniqueArticles = Array.from(new Map(articles.map((a: RawArticle) => [a.url, a])).values());
+
+  try {
+    // 1. Fetch all existing URLs in one query
+    const existingArticles = await db.article.findMany({
+      where: {
+        url: {
+          in: uniqueArticles.map((a: RawArticle) => a.url)
+        }
+      },
+      select: { url: true }
+    });
+
+    const existingUrls = new Set(existingArticles.map((a: { url: string }) => a.url));
+
+    // 2. Filter out already existing articles
+    const newArticles = uniqueArticles.filter((a: RawArticle) => !existingUrls.has(a.url));
+
+    if (newArticles.length === 0) return 0;
+
+    // 3. Prepare data for batch insertion
+    const dataToInsert = newArticles.map(article => {
       const outlet = getOutletInfo(article.domain);
-      
-      // Create article in database
-      await db.article.create({
-        data: {
-          id: crypto.randomUUID(),
-          title: article.title,
-          url: article.url,
-          source: article.source,
-          publishedAt: article.publishedAt,
-          category: 'Politics',
-          spectrumScore: outlet?.biasScore || 0,
-          popularityScore: 'Medium',
-          aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
-          updatedAt: new Date(),
-        },
-      });
-      
-      stored++;
-    } catch (error) {
-      console.error(`Error storing article "${article.title}":`, error);
-    }
+      return {
+        id: crypto.randomUUID(),
+        title: article.title,
+        url: article.url,
+        source: article.source,
+        publishedAt: article.publishedAt,
+        category: 'Politics',
+        spectrumScore: outlet?.biasScore || 0,
+        popularityScore: 'Medium',
+        aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
+        updatedAt: new Date(),
+      };
+    });
+
+    // 4. Batch insert using createMany
+    const result = await db.article.createMany({
+      data: dataToInsert,
+      skipDuplicates: true
+    });
+
+    return result.count;
+  } catch (error) {
+    console.error(`Error storing articles batch:`, error);
+    return 0;
   }
-  
-  return stored;
 }
 
 /**
@@ -351,7 +361,7 @@ export async function getHeadlinesForFrontend(): Promise<{
       take: 12,
     });
     
-    const formatCached = (articles: typeof cachedArticles) => articles.map(a => ({
+    const formatCached = (articles: typeof cachedArticles) => articles.map((a: { title: string; source: string; url: string; publishedAt: Date }) => ({
       headline: a.title,
       source: a.source,
       url: a.url,
@@ -360,9 +370,9 @@ export async function getHeadlinesForFrontend(): Promise<{
     }));
     
     return {
-      leftHeadlines: formatCached(cachedArticles.filter(a => (a.spectrumScore || 0) < -1).slice(0, 4)),
-      centerHeadlines: formatCached(cachedArticles.filter(a => Math.abs(a.spectrumScore || 0) <= 1).slice(0, 4)),
-      rightHeadlines: formatCached(cachedArticles.filter(a => (a.spectrumScore || 0) > 1).slice(0, 4)),
+      leftHeadlines: formatCached(cachedArticles.filter((a: { spectrumScore: number | null }) => (a.spectrumScore || 0) < -1).slice(0, 4)),
+      centerHeadlines: formatCached(cachedArticles.filter((a: { spectrumScore: number | null }) => Math.abs(a.spectrumScore || 0) <= 1).slice(0, 4)),
+      rightHeadlines: formatCached(cachedArticles.filter((a: { spectrumScore: number | null }) => (a.spectrumScore || 0) > 1).slice(0, 4)),
       provider: 'Database Cache',
       model: 'Cached Articles',
     };
