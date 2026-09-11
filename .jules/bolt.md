@@ -1,0 +1,3 @@
+## 2025-02-28 - Optimizing Text Analysis Hot Paths
+**Learning:** In Node.js/Bun, repeatedly creating `new RegExp()` inside hot loops for simple string counting (`countOccurrences`) creates a significant performance bottleneck. Even simple array iterations (`.filter()`) have observable overhead when repeated millions of times during text processing.
+**Action:** Replace inline `new RegExp(..., 'gi')` instantiations with a module-scoped pre-lowercased cache array and use a custom `indexOf`-based while loop for counting occurrences. This pattern yields substantial execution speedups for text analysis functions.
