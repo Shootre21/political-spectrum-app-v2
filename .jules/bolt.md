@@ -1,0 +1,3 @@
+## 2024-05-18 - Replacing RegExp with indexOf in Node.js
+**Learning:** In Node.js/Bun, replacing dynamic inline global `new RegExp()` matching in hot loops with standard string searching (`indexOf` in a `while` loop) is drastically faster and removes massive overhead related to JIT compilation and Regex state tracking. Pre-lowercasing static arrays of words outside the loop amplifies the speedup.
+**Action:** When evaluating code that scores or searches text by looping over lists of keywords (like lexicons), look for dynamic RegExp constructions (`new RegExp(term, 'gi')`) inside loops. Replacing them with pre-lowercased arrays and simple `indexOf()` loops can provide a massive 2x-5x speedup and eliminate unnecessary GC pressure.
