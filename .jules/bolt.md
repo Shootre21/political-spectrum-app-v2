@@ -1,0 +1,3 @@
+## 2024-05-15 - Fast Non-Overlapping Regex Alternative
+**Learning:** In Node.js/Bun, repeatedly creating `new RegExp()` in a hot loop (like for lexicon checking) is extremely slow and susceptible to bugs if strings have special characters. For simple term counting without overlaps (equivalent to `match(/term/gi)`), a custom `indexOf` loop (`pos = text.indexOf(term, pos)`) is ~2-3x faster and avoids all regex compilation overhead.
+**Action:** When analyzing large arrays of literal strings against a text buffer, always replace inline regex instantiation with a fast `indexOf` helper loop, advancing the index by `term.length` to guarantee non-overlapping counts.

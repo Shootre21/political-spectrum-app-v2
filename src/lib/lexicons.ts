@@ -366,6 +366,27 @@ export function detectTopic(text: string): string[] {
 }
 
 /**
+ * Helper to count non-overlapping term occurrences fast
+ */
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  const lowerTerm = term.toLowerCase(); // Cache term lowercase
+
+  while (true) {
+    pos = text.indexOf(lowerTerm, pos);
+    if (pos >= 0) {
+      count++;
+      pos += lowerTerm.length;
+    } else {
+      break;
+    }
+  }
+  return count;
+}
+
+/**
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
@@ -377,20 +398,18 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  for (let i = 0; i < lexicon.leftTerms.length; i++) {
+    const count = countOccurrences(lowerText, lexicon.leftTerms[i]);
+    if (count > 0) {
+      score -= count * 0.5;
     }
   }
   
   // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  for (let i = 0; i < lexicon.rightTerms.length; i++) {
+    const count = countOccurrences(lowerText, lexicon.rightTerms[i]);
+    if (count > 0) {
+      score += count * 0.5;
     }
   }
   
@@ -405,11 +424,10 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+  for (let i = 0; i < EMOTIONAL_LEXICON.highEmotion.length; i++) {
+    const count = countOccurrences(lowerText, EMOTIONAL_LEXICON.highEmotion[i]);
+    if (count > 0) {
+      score += count * 2;
     }
   }
   
