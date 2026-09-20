@@ -1,0 +1,3 @@
+## 2025-05-18 - Replacing Dynamic Regex with indexOf While-Loops
+**Learning:** In Node.js/Bun, instantiating new `RegExp(term, 'gi')` inside hot loops for simple string matching/occurrence counting is surprisingly expensive and a major bottleneck. Replacing it with a pre-lowercased string and an `indexOf` while-loop yields massive performance gains.
+**Action:** When searching for occurrences of multiple literal strings across a large text body, avoid dynamic regex generation. Pre-lowercase both the text and the search terms, and use an `indexOf` while-loop to count occurrences. Note that you must advance the index by the length of the matching term (`pos += term.length`) to simulate the non-overlapping behavior of regex.
