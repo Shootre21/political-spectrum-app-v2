@@ -1,0 +1,3 @@
+## 2024-06-25 - High-Performance Text Analysis in Node/Bun
+**Learning:** In hot loops checking for string occurrences across arrays of text (e.g., bias dictionaries), instantiating `new RegExp(..., 'gi')` and using `String.prototype.match()` inside the loop is a massive performance bottleneck. The overhead of compiling the regular expression repeatedly outweighs its use. A simple `indexOf()` while-loop with pre-lowercased strings at the module scope is more than 2x faster in realistic workloads.
+**Action:** When implementing counting or existence checks for string matching across arrays in hot paths, avoid inline regex instantiations. Instead, pre-lowercase static arrays used for checks at module scope, and implement standard `for`/`while` loops with `indexOf()`.
