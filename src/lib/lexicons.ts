@@ -347,6 +347,12 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Optimization: Pre-compute lowercased flat arrays of terms for each topic
+const LOWERCASE_TOPIC_TERMS_FLAT = Object.entries(TOPIC_LEXICONS).reduce((acc, [topic, lexicon]) => {
+  acc[topic] = [...lexicon.leftTerms, ...lexicon.rightTerms].map(t => t.toLowerCase());
+  return acc;
+}, {} as Record<string, string[]>);
+
 /**
  * Detect topic from text
  */
@@ -354,11 +360,13 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
-      topics.push(topic);
+  for (const topic in LOWERCASE_TOPIC_TERMS_FLAT) {
+    const terms = LOWERCASE_TOPIC_TERMS_FLAT[topic];
+    for (let i = 0; i < terms.length; i++) {
+      if (lowerText.includes(terms[i])) {
+        topics.push(topic);
+        break; // Early return for this topic once a match is found
+      }
     }
   }
   
