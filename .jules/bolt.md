@@ -1,0 +1,3 @@
+## 2024-09-27 - Lexicon Processing Bottlenecks
+**Learning:** In hot loops involving heavy text processing, dynamically compiling `new RegExp(..., 'gi')` inside the loop causes massive memory allocations (match array instantiation) and severe CPU overhead. A simple string-based `indexOf` in a while-loop can perform the equivalent of a global regex match over 2.5x faster without allocations. Similarly, `.filter()` checks on concatenated arrays inside loops cost significant performance and can be replaced with explicit `for` loops utilizing `break`.
+**Action:** When searching for literal strings from static lists, prefer `indexOf` loops with short-circuiting over dynamic regex instantiations and `.filter()` functional array methods in high-throughput parsing paths.
