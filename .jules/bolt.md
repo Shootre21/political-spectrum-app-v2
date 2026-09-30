@@ -1,0 +1,3 @@
+## 2024-09-30 - Regex compilation in hot loops is a massive bottleneck
+**Learning:** In text analysis (like `calculateFramingScore`), creating `new RegExp(..., 'gi')` inside a loop over lexicon arrays is heavily inefficient. Replacing inline `new RegExp()` instantiations with `String.prototype.indexOf()` inside a `while` loop, advancing by `term.length`, provides > 2x speedup in Bun/Node.
+**Action:** When searching for literal strings from static lists, prefer `indexOf` over dynamic regex instantiations to prevent latent bugs with regex special characters and improve execution speed. Always include `if (term.length === 0) continue;` to prevent infinite loops.
