@@ -1,0 +1,3 @@
+## 2024-05-24 - JIT Optimization Impacts on Microbenchmarks
+**Learning:** When benchmarking string search operations in Bun/Node, JIT optimizations can artificially inflate the performance of single-term inline regex `match` in microbenchmarks. For realistic workloads with arrays of multiple terms, `indexOf` loops with pre-lowercased strings remain significantly faster and more reliable than inline regex instantiations.
+**Action:** Always test optimizations using representative workloads (e.g., iterating over the full `leftTerms` and `rightTerms` arrays) rather than isolated single-term checks to ensure accurate performance metrics before creating a PR.
