@@ -378,19 +378,28 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   // Count left-framing terms
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    const search = term.toLowerCase();
+    if (search.length === 0) continue;
+    let pos = 0;
+
+    // Performance Optimization: Using indexOf in a while loop is significantly faster
+    // than creating a new RegExp inside the hot loop and avoids regex special char bugs.
+    while ((pos = lowerText.indexOf(search, pos)) !== -1) {
+      score -= 0.5;
+      pos += search.length;
     }
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    const search = term.toLowerCase();
+    if (search.length === 0) continue;
+    let pos = 0;
+
+    // Performance Optimization: Replaced slow dynamic regex generation with fast indexOf
+    while ((pos = lowerText.indexOf(search, pos)) !== -1) {
+      score += 0.5;
+      pos += search.length;
     }
   }
   
@@ -406,10 +415,15 @@ export function calculateEmotionalScore(text: string): number {
   
   // Count high-emotion words
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    const search = word.toLowerCase();
+    if (search.length === 0) continue;
+    let pos = 0;
+
+    // Performance Optimization: Using indexOf in a while loop is significantly faster
+    // than creating a new RegExp inside the hot loop.
+    while ((pos = lowerText.indexOf(search, pos)) !== -1) {
+      score += 2;
+      pos += search.length;
     }
   }
   
