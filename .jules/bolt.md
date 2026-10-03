@@ -1,0 +1,3 @@
+## 2024-06-19 - Fast string occurrence counting without RegExp
+**Learning:** In Bun/Node text analysis, dynamic inline compilation of `new RegExp(word, 'gi')` inside loops is a massive performance bottleneck. Replacing `match()` with a `while` loop utilizing `String.prototype.indexOf(term, pos)` is significantly faster, but requires safely advancing `pos` by the term's length to simulate non-overlapping match counting correctly. Additionally, an initial length check (`term.length === 0`) must be included before the loop to prevent infinite loop deadlocks.
+**Action:** When implementing text search and string frequency analysis, use `indexOf()` loops over inline RegExp instantiation, but always include empty string guard clauses.
