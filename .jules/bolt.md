@@ -1,0 +1,3 @@
+## 2024-05-17 - Dynamic RegExp vs indexOf in hot loops
+**Learning:** In Bun/Node, dynamically instantiating `new RegExp(..., 'gi')` inside a hot loop (like checking text against hundreds of lexicon terms) is significantly slower (by ~2.4x) than using `indexOf` in a while-loop. Furthermore, if lexicon terms contain regex special characters (like `+`, `?`), `new RegExp` can throw `SyntaxError`, whereas `indexOf` safely checks for literal strings.
+**Action:** Always replace dynamic inline `new RegExp` matching with `indexOf` loops when searching for static literal terms within a hot path. Ensure to manually advance the search index by `term.length` to mimic the global `/g` non-overlapping match behavior.
