@@ -1,0 +1,4 @@
+
+## 2024-05-18 - Fast String Searching Over Lexicon Arrays
+**Learning:** In Bun/Node.js text analysis logic (`src/lib/lexicons.ts`), caching arrays of terms at module scope and iterating over them using `String.prototype.indexOf()` inside a `while` loop is significantly faster than generating inline `new RegExp(..., 'gi')` objects on every call for counting term occurrences. Additionally, using `Array.prototype.some()` to test for boolean presence short-circuits evaluation effectively compared to allocating intermediate arrays with `.filter(...).length > 0`.
+**Action:** When implementing high-performance text parsing against predefined lexicons, pre-compute lowercased arrays at module scope and use native string search functions (`indexOf`, `includes`) coupled with early-return or short-circuit array methods (`some`) to avoid the heavy runtime allocation costs associated with regex instantiation and array mapping.
