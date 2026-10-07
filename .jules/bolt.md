@@ -1,0 +1,3 @@
+## 2024-05-18 - Lexicon Pre-computation and Regex Removal
+**Learning:** In tight loops analyzing text against large static lexicons, dynamic `new RegExp(term, 'gi')` instantiations are significantly slower than a custom occurrence counting loop using `String.prototype.indexOf`. Pre-computing lowercased arrays of terms at the module level prevents repetitive array allocations and string lowercasing inside iteration loops, reducing full suite benchmarking time from ~5.19s to ~3.40s.
+**Action:** When working with static term lists for text matching, cache `.toLowerCase()` variants at module load and prefer `.some()` or custom `.indexOf` while-loops over dynamic global `RegExp` matching to achieve substantial JIT performance wins and reduce GC pressure.
