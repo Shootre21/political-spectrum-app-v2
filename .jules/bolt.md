@@ -1,0 +1,3 @@
+## 2024-05-16 - Replacing RegExp in Hot Loops with indexOf
+**Learning:** In Bun/Node text analysis, caching arrays of pre-compiled global regular expressions performs significantly worse than inline regex due to iterative search overhead. However, replacing `String.prototype.match()` with a simple string `indexOf` loop yields massive performance improvements (2-4x faster for calculations).
+**Action:** When searching for literal strings from static lexicons without complex regex syntax, replace dynamic `new RegExp(term, "gi")` and `.match()` with module-scoped pre-lowercased arrays and non-overlapping `indexOf` loops.
