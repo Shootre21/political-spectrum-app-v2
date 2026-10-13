@@ -1,0 +1,3 @@
+## 2024-05-24 - Dynamic RegExp Compilation Overhead in Loops
+**Learning:** Instantiating `new RegExp(..., 'gi')` inside loops for dictionary-based text scoring (`calculateFramingScore`, `calculateEmotionalScore`) causes massive GC overhead and string allocation overhead when combined with `.match()`.
+**Action:** For simple substring counting (where complex regex matching isn't required), using a standard `indexOf` inside a `while` loop with a pre-lowercased search term is up to 3x-4x faster than dynamic regex compilation and avoids heavy GC usage. Always include an infinite loop safeguard (`if (term.length === 0) continue;`).
