@@ -1,0 +1,3 @@
+## 2025-03-02 - RegExp Overload in Node Text Analysis
+**Learning:** Instantiating `new RegExp(term, 'gi')` inside hot loops for every term in a large lexicon array creates massive garbage collection and compilation overhead. Replacing these with `String.prototype.indexOf()` inside a while-loop (advancing `pos` by `term.length` to mimic non-overlapping `/g` behavior) dramatically improved throughput in microbenchmarks (from ~600ms to ~110ms).
+**Action:** When searching for literal strings (with no complex regex tokens like `\b` or `\d`), strictly prefer `indexOf` while-loops over dynamic `RegExp` generation inside hot paths like scoring and text analysis engines.

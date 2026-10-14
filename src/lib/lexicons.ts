@@ -377,20 +377,26 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
+  // Optimization: using indexOf in a loop avoids instantiating new RegExp
+  // on every call, significantly improving hot-path text analysis.
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    if (term.length === 0) continue;
+    const lowerTerm = term.toLowerCase();
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      score -= 0.5;
+      pos += lowerTerm.length; // Advance by term length to mimic non-overlapping regex matching
     }
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    if (term.length === 0) continue;
+    const lowerTerm = term.toLowerCase();
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      score += 0.5;
+      pos += lowerTerm.length;
     }
   }
   
@@ -405,11 +411,14 @@ export function calculateEmotionalScore(text: string): number {
   let score = 0;
   
   // Count high-emotion words
+  // Optimization: using indexOf avoids dynamic global RegExp instantiation overhead
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    if (word.length === 0) continue;
+    const lowerWord = word.toLowerCase();
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerWord, pos)) !== -1) {
+      score += 2;
+      pos += lowerWord.length; // Ensure non-overlapping matches
     }
   }
   
