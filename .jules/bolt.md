@@ -1,0 +1,3 @@
+## 2024-05-30 - Optimize Regex match loops in Lexicon scoring
+**Learning:** In text analysis hot loops like `calculateFramingScore` and `calculateEmotionalScore`, instantiating new `RegExp` objects with 'gi' flags for every single term in the lexicon arrays is extremely slow, especially when processing many documents or long texts.
+**Action:** When counting occurrences of simple string terms (no complex regex patterns), replace `new RegExp(term, 'gi')` and `string.match()` with a `while` loop using `indexOf`. By advancing the `indexOf` position by `term.length`, we perfectly mimic the non-overlapping matching behavior of global regex without the overhead of the regex engine.
