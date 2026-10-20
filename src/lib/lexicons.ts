@@ -368,6 +368,23 @@ export function detectTopic(text: string): string[] {
 /**
  * Calculate framing score for a topic
  */
+/**
+ * Helper to count occurrences of a term using fast substring search
+ * Replaces expensive dynamic RegExp creation in hot paths
+ */
+function countOccurrences(text: string, term: string): number {
+  if (term.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while (true) {
+    pos = text.indexOf(term, pos);
+    if (pos === -1) break;
+    count++;
+    pos += term.length;
+  }
+  return count;
+}
+
 export function calculateFramingScore(text: string, topic: string): number {
   const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
   if (!lexicon) return 0;
@@ -378,20 +395,12 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   // Count left-framing terms
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
-    }
+    score -= countOccurrences(lowerText, term.toLowerCase()) * 0.5;
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
-    }
+    score += countOccurrences(lowerText, term.toLowerCase()) * 0.5;
   }
   
   return score;
