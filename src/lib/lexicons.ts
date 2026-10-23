@@ -376,22 +376,30 @@ export function calculateFramingScore(text: string, topic: string): number {
   
   let score = 0;
   
-  // Count left-framing terms
+  // Count left-framing terms (optimized with indexOf instead of dynamic RegExp)
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    const lowerTerm = term.toLowerCase();
+    if (lowerTerm.length === 0) continue;
+    let pos = 0;
+    let count = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      count++;
+      pos += lowerTerm.length;
     }
+    score -= count * 0.5;
   }
   
-  // Count right-framing terms
+  // Count right-framing terms (optimized with indexOf instead of dynamic RegExp)
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    const lowerTerm = term.toLowerCase();
+    if (lowerTerm.length === 0) continue;
+    let pos = 0;
+    let count = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      count++;
+      pos += lowerTerm.length;
     }
+    score += count * 0.5;
   }
   
   return score;
@@ -404,13 +412,17 @@ export function calculateEmotionalScore(text: string): number {
   const lowerText = text.toLowerCase();
   let score = 0;
   
-  // Count high-emotion words
+  // Count high-emotion words (optimized with indexOf instead of dynamic RegExp)
   for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+    const lowerTerm = word.toLowerCase();
+    if (lowerTerm.length === 0) continue;
+    let pos = 0;
+    let count = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      count++;
+      pos += lowerTerm.length;
     }
+    score += count * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
