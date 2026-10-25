@@ -365,32 +365,49 @@ export function detectTopic(text: string): string[] {
   return topics;
 }
 
+// Module-scoped cache for framing terms (pre-lowercased) to avoid allocating in hot loop
+const FRAMING_TERMS_CACHE = Object.entries(TOPIC_LEXICONS).reduce((acc, [topic, lexicon]) => {
+  acc[topic] = {
+    left: lexicon.leftTerms.map(t => t.toLowerCase()),
+    right: lexicon.rightTerms.map(t => t.toLowerCase())
+  };
+  return acc;
+}, {} as Record<string, { left: string[], right: string[] }>);
+
 /**
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const cached = FRAMING_TERMS_CACHE[topic];
+  if (!cached) return 0;
   
   const lowerText = text.toLowerCase();
   
   let score = 0;
   
-  // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  // Count left-framing terms using indexOf instead of regex matching
+  for (let i = 0; i < cached.left.length; i++) {
+    const term = cached.left[i];
+    if (term.length === 0) continue;
+    let pos = 0;
+    while (true) {
+      pos = lowerText.indexOf(term, pos);
+      if (pos === -1) break;
+      score -= 0.5;
+      pos += term.length; // Advance by term length to avoid overlapping matches like regex
     }
   }
   
-  // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  // Count right-framing terms using indexOf instead of regex matching
+  for (let i = 0; i < cached.right.length; i++) {
+    const term = cached.right[i];
+    if (term.length === 0) continue;
+    let pos = 0;
+    while (true) {
+      pos = lowerText.indexOf(term, pos);
+      if (pos === -1) break;
+      score += 0.5;
+      pos += term.length; // Advance by term length to avoid overlapping matches like regex
     }
   }
   
