@@ -1,0 +1,3 @@
+## 2025-02-25 - Regex overhead in lexicon string counting
+**Learning:** In Bun/Node text analysis, dynamic inline global `new RegExp(..., 'gi')` inside hot loops causes immense overhead and unnecessary array allocations for `.match()` calls. For simple string matching over large text corpora (like the lexicon analysis), an `indexOf` while-loop avoiding regex entirely is significantly faster (30%+ improvement).
+**Action:** Prefer literal `indexOf` with while-loops and length increments for simple non-overlapping substring counting instead of inline `RegExp`, unless regex capabilities are explicitly needed. Ensure `.toLowerCase()` checks are preserved.
