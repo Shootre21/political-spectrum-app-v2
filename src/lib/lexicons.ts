@@ -244,6 +244,13 @@ export const TOPIC_LEXICONS = {
   },
 };
 
+// Pre-compute flattened and lowercased arrays for high-performance string matching
+// Using this instead of dynamically generating arrays and lowercasing in detectTopic()
+export const PRECOMPUTED_TOPICS = Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => ({
+  topic,
+  terms: [...lexicon.leftTerms, ...lexicon.rightTerms].map(t => t.toLowerCase())
+}));
+
 // Emotional/sensational language markers
 export const EMOTIONAL_LEXICON = {
   highEmotion: [
@@ -354,10 +361,11 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
+  // Use pre-computed, pre-lowercased, flattened array to avoid inline array mapping,
+  // spreading, and string creation in loop. Array.some short-circuits.
+  for (let i = 0; i < PRECOMPUTED_TOPICS.length; i++) {
+    const { topic, terms } = PRECOMPUTED_TOPICS[i];
+    if (terms.some(term => lowerText.includes(term))) {
       topics.push(topic);
     }
   }
