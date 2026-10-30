@@ -347,6 +347,22 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Module-scoped caches for pre-lowercased lexicons to avoid runtime overhead
+export const CACHED_TOPIC_LEXICONS = Object.fromEntries(
+  Object.entries(TOPIC_LEXICONS).map(([topic, lexicon]) => [
+    topic,
+    {
+      leftTerms: lexicon.leftTerms.map(term => term.toLowerCase()).filter(t => t.length > 0),
+      rightTerms: lexicon.rightTerms.map(term => term.toLowerCase()).filter(t => t.length > 0)
+    }
+  ])
+) as Record<keyof typeof TOPIC_LEXICONS, { leftTerms: string[]; rightTerms: string[] }>;
+
+export const CACHED_EMOTIONAL_LEXICON = {
+  ...EMOTIONAL_LEXICON,
+  highEmotion: EMOTIONAL_LEXICON.highEmotion.map(term => term.toLowerCase()).filter(t => t.length > 0)
+};
+
 /**
  * Detect topic from text
  */
@@ -354,10 +370,12 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
+  for (const [topic, lexicon] of Object.entries(CACHED_TOPIC_LEXICONS)) {
+    // Array.prototype.some() provides short-circuiting performance benefits
+    // over mapping and filtering newly allocated arrays
+    const hasMatch = lexicon.leftTerms.some(term => lowerText.includes(term)) ||
+                     lexicon.rightTerms.some(term => lowerText.includes(term));
+    if (hasMatch) {
       topics.push(topic);
     }
   }
@@ -369,29 +387,34 @@ export function detectTopic(text: string): string[] {
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
+  const lexicon = CACHED_TOPIC_LEXICONS[topic as keyof typeof CACHED_TOPIC_LEXICONS];
   if (!lexicon) return 0;
   
   const lowerText = text.toLowerCase();
   
   let score = 0;
   
+  // Using indexOf instead of RegExp inside the loop for performance
   // Count left-framing terms
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    let count = 0;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      count++;
+      pos += term.length;
     }
+    score -= count * 0.5;
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    let count = 0;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      count++;
+      pos += term.length;
     }
+    score += count * 0.5;
   }
   
   return score;
@@ -404,13 +427,16 @@ export function calculateEmotionalScore(text: string): number {
   const lowerText = text.toLowerCase();
   let score = 0;
   
+  // Using indexOf instead of RegExp inside the loop for performance
   // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+  for (const word of CACHED_EMOTIONAL_LEXICON.highEmotion) {
+    let count = 0;
+    let pos = 0;
+    while ((pos = lowerText.indexOf(word, pos)) !== -1) {
+      count++;
+      pos += word.length;
     }
+    score += count * 2;
   }
   
   return Math.min(score / 10, 10); // Normalize to 0-10
