@@ -1,0 +1,3 @@
+## 2024-11-01 - Lexicon RegExp Performance Optimization
+**Learning:** In Bun/Node text analysis, dynamic global `new RegExp(..., 'gi')` instantiations inside hot loops for simple string counting are very slow due to iteration overhead and regex engine initialization. Pre-compiled lowercased string `indexOf` loops offer a massive performance improvement (often 10x-50x faster) for basic term counting, provided you account for empty strings.
+**Action:** Replace `match(new RegExp(term, 'gi'))` with a `while` loop using `indexOf(term, pos)` when performing plain substring frequency counting, especially in hot paths like text framing/emotion scoring.
