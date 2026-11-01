@@ -347,6 +347,12 @@ export const SOURCE_TYPE_INDICATORS = {
   victim: ['victim', 'survivor', 'family', 'witness'],
 };
 
+// Cache for detectTopic to prevent array allocations inside the loop
+const TOPIC_TERMS_CACHE = Object.entries(TOPIC_LEXICONS).reduce((acc, [topic, lexicon]) => {
+  acc[topic] = [...lexicon.leftTerms, ...lexicon.rightTerms].map(t => t.toLowerCase());
+  return acc;
+}, {} as Record<string, string[]>);
+
 /**
  * Detect topic from text
  */
@@ -354,10 +360,9 @@ export function detectTopic(text: string): string[] {
   const topics: string[] = [];
   const lowerText = text.toLowerCase();
   
-  for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
+  for (const topic of Object.keys(TOPIC_LEXICONS)) {
+    // Using .some() with pre-lowercased cache for performance
+    if (TOPIC_TERMS_CACHE[topic].some(term => lowerText.includes(term))) {
       topics.push(topic);
     }
   }
@@ -365,37 +370,48 @@ export function detectTopic(text: string): string[] {
   return topics;
 }
 
+// Cache for calculateFramingScore to prevent creating RegExp objects inside loop
+const FRAMING_CACHE: Record<string, { left: string[], right: string[] }> = {};
+for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
+  FRAMING_CACHE[topic] = {
+    left: lexicon.leftTerms.map(t => t.toLowerCase()).filter(t => t.length > 0),
+    right: lexicon.rightTerms.map(t => t.toLowerCase()).filter(t => t.length > 0)
+  };
+}
+
 /**
  * Calculate framing score for a topic
  */
 export function calculateFramingScore(text: string, topic: string): number {
-  const lexicon = TOPIC_LEXICONS[topic as keyof typeof TOPIC_LEXICONS];
-  if (!lexicon) return 0;
+  const cache = FRAMING_CACHE[topic];
+  if (!cache) return 0;
   
   const lowerText = text.toLowerCase();
-  
   let score = 0;
   
-  // Count left-framing terms
-  for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+  // Count left-framing terms using indexOf instead of RegExp for performance
+  for (const term of cache.left) {
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      score -= 0.5;
+      pos += term.length; // advance by length to mimic non-overlapping regex match
     }
   }
   
-  // Count right-framing terms
-  for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+  // Count right-framing terms using indexOf instead of RegExp for performance
+  for (const term of cache.right) {
+    let pos = 0;
+    while ((pos = lowerText.indexOf(term, pos)) !== -1) {
+      score += 0.5;
+      pos += term.length; // advance by length to mimic non-overlapping regex match
     }
   }
   
   return score;
 }
+
+// Cache for calculateEmotionalScore to prevent creating RegExp objects inside loop
+const HIGH_EMOTION_CACHE = EMOTIONAL_LEXICON.highEmotion.map(w => w.toLowerCase()).filter(w => w.length > 0);
 
 /**
  * Calculate emotional intensity score
@@ -404,12 +420,12 @@ export function calculateEmotionalScore(text: string): number {
   const lowerText = text.toLowerCase();
   let score = 0;
   
-  // Count high-emotion words
-  for (const word of EMOTIONAL_LEXICON.highEmotion) {
-    const regex = new RegExp(word, 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 2;
+  // Count high-emotion words using indexOf instead of RegExp for performance
+  for (const word of HIGH_EMOTION_CACHE) {
+    let pos = 0;
+    while ((pos = lowerText.indexOf(word, pos)) !== -1) {
+      score += 2;
+      pos += word.length; // advance by length to mimic non-overlapping regex match
     }
   }
   
