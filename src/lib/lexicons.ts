@@ -355,9 +355,16 @@ export function detectTopic(text: string): string[] {
   const lowerText = text.toLowerCase();
   
   for (const [topic, lexicon] of Object.entries(TOPIC_LEXICONS)) {
-    const allTerms = [...lexicon.leftTerms, ...lexicon.rightTerms];
-    const matches = allTerms.filter(term => lowerText.includes(term.toLowerCase()));
-    if (matches.length > 0) {
+    // Optimization: Use some() instead of spreading arrays and filtering to prevent allocations and enable short-circuiting
+    let found = false;
+
+    if (lexicon.leftTerms.some(term => lowerText.includes(term.toLowerCase()))) {
+      found = true;
+    } else if (lexicon.rightTerms.some(term => lowerText.includes(term.toLowerCase()))) {
+      found = true;
+    }
+
+    if (found) {
       topics.push(topic);
     }
   }
