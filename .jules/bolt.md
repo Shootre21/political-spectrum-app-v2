@@ -1,0 +1,3 @@
+## 2024-11-03 - RegExp Instantiation vs `indexOf` in loops
+**Learning:** In Bun/Node, for text analysis where a lexicon consists of simple static string terms without regex features, replacing inner-loop `new RegExp(term, 'gi')` instantiations and `.match()` with simple `indexOf` loops with pre-lowercased terms can provide a 2x-3x performance boost. Since these operations run repeatedly inside `for` loops across multiple functions (`calculateFramingScore`, `calculateEmotionalScore`), this overhead accumulates significantly over large arrays.
+**Action:** When searching for literal strings from static lists in hot paths, prefer `indexOf` inside a `while` loop (or module-scoped `RegExp` arrays) over dynamically instantiating `new RegExp()` inside loops.
