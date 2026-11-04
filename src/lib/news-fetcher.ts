@@ -205,47 +205,61 @@ export async function fetchHeadlinesFromRSS(): Promise<FetchedHeadlines> {
  * Store articles in database (ALWAYS happens regardless of AI)
  */
 export async function storeArticlesInDatabase(articles: RawArticle[]): Promise<number> {
-  let stored = 0;
-  
-  for (const article of articles) {
-    try {
-      // Check if article already exists
-      const existing = await db.article.findFirst({
-        where: {
-          url: article.url,
-        },
-      });
-      
-      if (existing) {
-        continue; // Skip duplicates
-      }
-      
-      // Get outlet bias for initial categorization
-      const outlet = getOutletInfo(article.domain);
-      
-      // Create article in database
-      await db.article.create({
-        data: {
-          id: crypto.randomUUID(),
-          title: article.title,
-          url: article.url,
-          source: article.source,
-          publishedAt: article.publishedAt,
-          category: 'Politics',
-          spectrumScore: outlet?.biasScore || 0,
-          popularityScore: 'Medium',
-          aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
-          updatedAt: new Date(),
-        },
-      });
-      
-      stored++;
-    } catch (error) {
-      console.error(`Error storing article "${article.title}":`, error);
+  // Deduplicate articles internally by URL first to prevent batch collision
+  const uniqueArticlesMap = new Map<string, RawArticle>();
+  for (const a of articles) {
+    if (!uniqueArticlesMap.has(a.url)) {
+      uniqueArticlesMap.set(a.url, a);
     }
   }
+  const uniqueArticles = Array.from(uniqueArticlesMap.values());
+  if (uniqueArticles.length === 0) return 0;
   
-  return stored;
+  // Find which URLs already exist in the database using a batched query
+  const existingArticles = await db.article.findMany({
+    where: {
+      url: {
+        in: uniqueArticles.map(a => a.url)
+      }
+    },
+    select: {
+      url: true
+    }
+  });
+
+  const existingUrlSet = new Set(existingArticles.map(a => a.url));
+  const toInsert = uniqueArticles.filter(a => !existingUrlSet.has(a.url));
+
+  if (toInsert.length === 0) return 0;
+  
+  // Prepare data for batched insertion
+  const createData = toInsert.map((article: RawArticle) => {
+    const outlet = getOutletInfo(article.domain);
+    return {
+      id: crypto.randomUUID(),
+      title: article.title,
+      url: article.url,
+      source: article.source,
+      publishedAt: article.publishedAt,
+      category: 'Politics',
+      spectrumScore: outlet?.biasScore || 0,
+      popularityScore: 'Medium',
+      aiProvider: 'RSS', // Indicates this was fetched, not AI-generated
+      updatedAt: new Date(),
+    };
+  });
+
+  try {
+    // Insert all missing articles efficiently via createMany
+    const result = await db.article.createMany({
+      data: createData,
+    });
+
+    return result.count;
+  } catch (error) {
+    console.error(`Error storing articles batch:`, error);
+    return 0;
+  }
 }
 
 /**
