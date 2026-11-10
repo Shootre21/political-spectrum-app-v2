@@ -1,0 +1,3 @@
+## 2025-02-20 - RegExp instantiation overhead in text analysis
+**Learning:** In `src/lib/lexicons.ts`, constructing dynamic `new RegExp()` inside loops for simple term counting is significantly slower than using standard string `.indexOf` within a while-loop. When scanning large texts across many lexicon terms (like framing scores), doing pre-processing or replacing RegExp with `indexOf` yielded a >2x performance improvement (384ms down to 136ms for 10k iterations).
+**Action:** Replace dynamic `RegExp` with lowercased `indexOf` while-loops for simple text occurrence counting when regex features aren't actually needed.
