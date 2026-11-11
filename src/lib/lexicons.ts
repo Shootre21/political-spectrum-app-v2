@@ -377,20 +377,27 @@ export function calculateFramingScore(text: string, topic: string): number {
   let score = 0;
   
   // Count left-framing terms
+  // Using indexOf instead of RegExp inside the loop for performance
   for (const term of lexicon.leftTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score -= matches.length * 0.5;
+    const lowerTerm = term.toLowerCase();
+    if (lowerTerm.length === 0) continue;
+
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      score -= 0.5;
+      pos += lowerTerm.length;
     }
   }
   
   // Count right-framing terms
   for (const term of lexicon.rightTerms) {
-    const regex = new RegExp(term.toLowerCase(), 'gi');
-    const matches = lowerText.match(regex);
-    if (matches) {
-      score += matches.length * 0.5;
+    const lowerTerm = term.toLowerCase();
+    if (lowerTerm.length === 0) continue;
+
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerTerm, pos)) !== -1) {
+      score += 0.5;
+      pos += lowerTerm.length;
     }
   }
   
